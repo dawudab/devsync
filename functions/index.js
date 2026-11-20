@@ -6,6 +6,8 @@ export {
   selectRepository,
   disconnectGithub,
   joinWorkspace,
+  updateMemberRole,
+  removeMember,
   retranslateUpdate,
   translatePreview,
   simulateEvent,

@@ -23,6 +23,33 @@ export function useTickets() {
   return { tickets: data || [], loading };
 }
 
+export function useMilestones() {
+  const { workspaceId } = useWorkspace();
+  const { data, loading } = useSubscription(workspaceId ? (cb) => backend.subscribeMilestones(workspaceId, cb) : null, [workspaceId]);
+  return { milestones: data || [], loading };
+}
+
+export function useBudgetLogs() {
+  const { workspaceId } = useWorkspace();
+  const { data, loading } = useSubscription(workspaceId ? (cb) => backend.subscribeBudgetLogs(workspaceId, cb) : null, [workspaceId]);
+  return { logs: data || [], loading };
+}
+
+export function useWeeklyDigests() {
+  const { workspaceId } = useWorkspace();
+  const { data, loading } = useSubscription(workspaceId ? (cb) => backend.subscribeWeeklyDigests(workspaceId, cb) : null, [workspaceId]);
+  return { digests: data || [], loading };
+}
+
+export function useInvites(enabled = true) {
+  const { workspaceId } = useWorkspace();
+  const { data, loading } = useSubscription(
+    workspaceId && enabled ? (cb) => backend.subscribeInvites(workspaceId, cb) : null,
+    [workspaceId, enabled],
+  );
+  return { invites: data || [], loading };
+}
+
 export function useWebhookLogs(enabled = true) {
   const { workspaceId } = useWorkspace();
   const { data, loading } = useSubscription(

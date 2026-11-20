@@ -57,7 +57,7 @@ function CommitPicker({ onPick, onCancel }) {
 }
 
 export function TicketDetailSheet({ ticket, onClose }) {
-  const { workspaceId, author, isDevView } = useWorkspace();
+  const { workspaceId, author, isDeveloper } = useWorkspace();
   const toast = useToast();
   const navigate = useNavigate();
   const [picking, setPicking] = useState(false);
@@ -102,7 +102,7 @@ export function TicketDetailSheet({ ticket, onClose }) {
           <p className="text-sm italic text-ink-400">No additional details.</p>
         )}
 
-        {isDevView && (
+        {isDeveloper && (
           <section className="space-y-2">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-400">Status</h4>
             <SegmentedControl
@@ -116,19 +116,19 @@ export function TicketDetailSheet({ ticket, onClose }) {
         )}
 
         <section className="space-y-2">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-400">{isDevView ? 'Linked commit' : 'Delivered in'}</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-400">{isDeveloper ? 'Linked commit' : 'Delivered in'}</h4>
           {ticket.linkedCommit ? (
             <div className="rounded-2xl bg-emerald-50/70 p-3 ring-1 ring-inset ring-emerald-100">
               <div className="flex items-start gap-2">
                 <GitCommitHorizontal className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
                 <div className="min-w-0 flex-1">
-                  {isDevView ? (
+                  {isDeveloper ? (
                     <>
                       <p className="font-mono text-xs font-semibold text-emerald-800">{shortSha(ticket.linkedCommit.sha)}</p>
                       <p className="break-words font-mono text-xs text-ink-700">{ticket.linkedCommit.message}</p>
                     </>
                   ) : (
-                    <p className="text-sm text-emerald-900">Your developer marked this as done and connected it to a specific code update.</p>
+                    <p className="text-sm text-emerald-900">Your developer marked this as done and connected it to a product update.</p>
                   )}
                 </div>
               </div>
@@ -146,21 +146,21 @@ export function TicketDetailSheet({ ticket, onClose }) {
                     See the update
                   </Button>
                 )}
-                {isDevView && ticket.linkedCommit.url && (
+                {isDeveloper && ticket.linkedCommit.url && (
                   <a href={ticket.linkedCommit.url} target="_blank" rel="noreferrer">
                     <Button size="sm" variant="ghost" icon={ExternalLink}>
                       GitHub
                     </Button>
                   </a>
                 )}
-                {isDevView && (
+                {isDeveloper && (
                   <Button size="sm" variant="ghost" icon={Unlink} disabled={busy} onClick={() => mutate({ linkedCommit: null }, { type: 'unlinked' })}>
                     Unlink
                   </Button>
                 )}
               </div>
             </div>
-          ) : isDevView ? (
+          ) : isDeveloper ? (
             picking ? (
               <CommitPicker onPick={link} onCancel={() => setPicking(false)} />
             ) : (

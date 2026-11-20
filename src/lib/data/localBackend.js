@@ -3,15 +3,16 @@ import { normalizeGithubEvent, buildUpdateDoc } from '@shared/github-events.js';
 import { heuristicTranslate } from '@shared/translator-core.js';
 import { store } from './localStore';
 import { buildDemoSeed, DEMO_PERSONAS } from './demoSeed';
-import { generateId, generateInviteCode } from './ids';
+import { generateId, generateInviteCode, generateShortInviteCode } from './ids';
 
-const PERSONA_KEY = 'devsync:view-mode';
+const PERSONA_KEY = 'devsync:demo-persona';
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 const byDesc = (key) => (a, b) => (b[key] || 0) - (a[key] || 0);
+const byAsc = (key) => (a, b) => (a[key] || 0) - (b[key] || 0);
 
 /**
  * Demo Mode backend: same contract as the Firestore backend, backed by localStorage.
- * The signed-in persona follows the Owner/Developer view switcher so both sides can be tested.
+ * Enforces the same role-based permissions per workspace ('owner', 'team_member', 'developer').
  */
 export function createLocalBackend() {
   if (store.isEmpty()) store.reset(buildDemoSeed());
@@ -21,10 +22,15 @@ export function createLocalBackend() {
   const emitAuth = () => authListeners.forEach((cb) => cb({ ...persona() }));
   const wsPath = (wsId) => `workspaces/${wsId}`;
 
-  function assertMember(wsId) {
+  function assertMember(wsId, allowedRoles) {
+    const p = persona();
     const ws = store.get(wsPath(wsId));
-    if (!ws || !ws.members[persona().uid]) throw new Error('You do not have access to this workspace');
-    return ws;
+    const role = ws?.members?.[p.uid];
+    if (!ws || !role) throw new Error('You do not have access to this workspace');
+    if (allowedRoles && !allowedRoles.includes(role)) {
+      throw new Error(`Permission denied: requires ${allowedRoles.join(' or ')} role`);
+    }
+    return { ws, role, user: p };
   }
 
   function log(wsId, entry) {
@@ -37,7 +43,7 @@ export function createLocalBackend() {
     mode: 'demo',
 
     setDemoPersona(role) {
-      localStorage.setItem(PERSONA_KEY, role === 'developer' ? 'developer' : 'owner');
+      localStorage.setItem(PERSONA_KEY, DEMO_PERSONAS[role] ? role : 'owner');
       emitAuth();
     },
 
@@ -59,7 +65,7 @@ export function createLocalBackend() {
         const ids = store.get(`users/${uid}`)?.workspaceIds || [];
         return ids
           .map((id) => store.get(wsPath(id)))
-          .filter(Boolean)
+          .filter((w) => w && w.members?.[uid])
           .map((w) => ({ id: w.id, name: w.name, role: w.members[uid] }));
       }, cb);
     },
@@ -67,38 +73,137 @@ export function createLocalBackend() {
     subscribeWorkspace(wsId, cb) {
       return store.watch(() => {
         const ws = store.get(wsPath(wsId));
-        return ws && ws.members[persona().uid] ? ws : null;
+        return ws && ws.members?.[persona().uid] ? ws : null;
       }, cb);
     },
 
-    async createWorkspace(user, name) {
+    async createWorkspace(user, name, creatorRole = 'owner', extras = {}) {
+      const role = creatorRole === 'developer' ? 'developer' : 'owner';
       const id = `ws-${generateId().slice(0, 10)}`;
-      const dev = DEMO_PERSONAS.developer;
       store.set(wsPath(id), {
         name: name.trim(),
-        ownerId: user.uid,
-        members: { [user.uid]: 'owner', [dev.uid]: 'developer' },
-        profiles: { [user.uid]: { name: user.displayName }, [dev.uid]: { name: dev.displayName } },
+        ownerId: role === 'owner' ? user.uid : null,
+        members: { [user.uid]: role },
+        profiles: { [user.uid]: { name: user.displayName, photoURL: user.photoURL || null } },
         inviteCode: generateInviteCode(),
+        businessProfile: extras.businessProfile || { tagline: '', industry: '' },
+        workspaceLinks: extras.workspaceLinks || { productionUrl: '', stagingUrl: '', designUrl: '' },
+        budget: extras.budget || { hourlyRate: 120, monthlyBudget: 4800, currency: 'USD' },
         ticketCounter: 0,
         github: null,
         createdAt: Date.now(),
       });
-      for (const uid of [user.uid, dev.uid]) {
-        const ids = store.get(`users/${uid}`)?.workspaceIds || [];
-        store.set(`users/${uid}`, { workspaceIds: [...ids, id] });
-      }
+      const ids = store.get(`users/${user.uid}`)?.workspaceIds || [];
+      store.set(`users/${user.uid}`, { workspaceIds: [...ids, id] });
       return id;
     },
 
+    async updateWorkspace(wsId, patch) {
+      assertMember(wsId, ['owner']);
+      store.update(wsPath(wsId), patch);
+    },
+
+    async deleteWorkspace(wsId) {
+      const { ws } = assertMember(wsId, ['owner']);
+      for (const uid of Object.keys(ws.members || {})) {
+        const ids = store.get(`users/${uid}`)?.workspaceIds || [];
+        store.set(`users/${uid}`, { workspaceIds: ids.filter((i) => i !== wsId) });
+      }
+      store.remove(wsPath(wsId));
+    },
+
     async joinWorkspace(code) {
-      const match = store.list('workspaces').find((w) => w.inviteCode === code.trim().toUpperCase());
+      const p = persona();
+      const clean = code.trim().toUpperCase();
+      const invite = store.get(`invites/${clean}`);
+      if (invite) {
+        const ws = store.get(wsPath(invite.workspaceId));
+        if (!ws) throw new Error('Workspace no longer exists');
+        if (invite.role === 'owner' && invite.usedBy && invite.usedBy !== p.uid) {
+          throw new Error('This owner invite has already been claimed');
+        }
+        if (!ws.members?.[p.uid]) {
+          store.update(wsPath(invite.workspaceId), {
+            members: { ...ws.members, [p.uid]: invite.role },
+            profiles: { ...ws.profiles, [p.uid]: { name: p.displayName, photoURL: p.photoURL || null } },
+            ...(invite.role === 'owner' && !ws.ownerId ? { ownerId: p.uid } : {}),
+          });
+          if (invite.role === 'owner') {
+            store.update(`invites/${clean}`, { usedBy: p.uid });
+          }
+          const ids = store.get(`users/${p.uid}`)?.workspaceIds || [];
+          if (!ids.includes(invite.workspaceId)) {
+            store.set(`users/${p.uid}`, { workspaceIds: [...ids, invite.workspaceId] });
+          }
+        }
+        return invite.workspaceId;
+      }
+
+      const match = store.list('workspaces').find((w) => w.inviteCode === clean);
       if (!match) throw new Error('That invite code is not valid');
+      if (!match.members?.[p.uid]) {
+        store.update(wsPath(match.id), {
+          members: { ...match.members, [p.uid]: 'developer' },
+          profiles: { ...match.profiles, [p.uid]: { name: p.displayName, photoURL: p.photoURL || null } },
+        });
+        const ids = store.get(`users/${p.uid}`)?.workspaceIds || [];
+        if (!ids.includes(match.id)) store.set(`users/${p.uid}`, { workspaceIds: [...ids, match.id] });
+      }
       return match.id;
     },
 
+    subscribeInvites(wsId, cb) {
+      return store.watch(() => {
+        if (!store.get(wsPath(wsId))?.members?.[persona().uid]) return [];
+        return store.list('invites').filter((inv) => inv.workspaceId === wsId).sort(byDesc('createdAt'));
+      }, cb);
+    },
+
+    async createInvite(wsId, workspaceName, role, creatorUid) {
+      const { role: callerRole } = assertMember(wsId, ['owner', 'developer']);
+      if (callerRole === 'developer' && role !== 'owner') {
+        throw new Error('Developers can only generate an Owner invite');
+      }
+      const code = generateShortInviteCode();
+      store.set(`invites/${code}`, {
+        code,
+        workspaceId: wsId,
+        workspaceName,
+        role,
+        createdBy: creatorUid,
+        usedBy: null,
+        createdAt: Date.now(),
+      });
+      return code;
+    },
+
+    async deleteInvite(code) {
+      const invite = store.get(`invites/${code}`);
+      if (!invite) return;
+      assertMember(invite.workspaceId, ['owner', 'developer']);
+      store.remove(`invites/${code}`);
+    },
+
+    async updateMemberRole(wsId, targetUid, role) {
+      const { ws } = assertMember(wsId, ['owner']);
+      if (targetUid === persona().uid) throw new Error('Cannot change your own role');
+      store.update(wsPath(wsId), { members: { ...ws.members, [targetUid]: role } });
+    },
+
+    async removeMember(wsId, targetUid) {
+      const { ws } = assertMember(wsId, ['owner']);
+      if (targetUid === persona().uid) throw new Error('Cannot remove yourself');
+      const members = { ...ws.members };
+      const profiles = { ...ws.profiles };
+      delete members[targetUid];
+      delete profiles[targetUid];
+      store.update(wsPath(wsId), { members, profiles });
+      const ids = store.get(`users/${targetUid}`)?.workspaceIds || [];
+      store.set(`users/${targetUid}`, { workspaceIds: ids.filter((i) => i !== wsId) });
+    },
+
     subscribeUpdates(wsId, cb) {
-      return store.watch(() => (store.get(wsPath(wsId))?.members[persona().uid] ? store.list(`${wsPath(wsId)}/updates`).sort(byDesc('createdAt')) : []), cb);
+      return store.watch(() => (store.get(wsPath(wsId))?.members?.[persona().uid] ? store.list(`${wsPath(wsId)}/updates`).sort(byDesc('createdAt')) : []), cb);
     },
 
     async toggleReaction(wsId, updateId, emoji, uid, active) {
@@ -111,20 +216,30 @@ export function createLocalBackend() {
       });
     },
 
+    async setUpdateApproval(wsId, updateId, { approvalStatus, approvalNote = null }, author) {
+      assertMember(wsId, ['owner']);
+      store.update(`${wsPath(wsId)}/updates/${updateId}`, {
+        approvalStatus,
+        approvalNote: approvalNote || null,
+        approvedBy: { uid: author.uid, name: author.displayName },
+        approvedAt: Date.now(),
+      });
+    },
+
     async translatePreview(wsId, change) {
-      assertMember(wsId);
+      assertMember(wsId, ['developer']);
       await delay(700);
       return heuristicTranslate(change);
     },
 
     async retranslateUpdate(wsId, updateId) {
-      assertMember(wsId);
+      assertMember(wsId, ['developer']);
       await delay(900);
       store.update(`${wsPath(wsId)}/updates/${updateId}`, (u) => ({ summary: heuristicTranslate(u) }));
     },
 
     subscribeComments(wsId, updateId, cb) {
-      return store.watch(() => store.list(`${wsPath(wsId)}/updates/${updateId}/comments`).sort((a, b) => a.createdAt - b.createdAt), cb);
+      return store.watch(() => store.list(`${wsPath(wsId)}/updates/${updateId}/comments`).sort(byAsc('createdAt')), cb);
     },
 
     async addComment(wsId, updateId, { text, parentId = null }, author) {
@@ -145,8 +260,9 @@ export function createLocalBackend() {
       return store.watch(() => store.list(`${wsPath(wsId)}/tickets`).sort(byDesc('createdAt')), cb);
     },
 
-    async createTicket(wsId, { title, description, priority }, author) {
-      const ws = assertMember(wsId);
+    async createTicket(wsId, { title, description, priority, kind = 'change_request', milestoneId = null }, author) {
+      const { ws, role } = assertMember(wsId);
+      const effectiveKind = role === 'team_member' ? 'suggestion' : kind;
       const number = (ws.ticketCounter || 0) + 1;
       store.update(wsPath(wsId), { ticketCounter: number });
       const id = generateId();
@@ -156,6 +272,8 @@ export function createLocalBackend() {
         title: title.trim(),
         description: description.trim(),
         priority,
+        kind: effectiveKind,
+        milestoneId: milestoneId || null,
         status: 'todo',
         createdBy: { uid: author.uid, name: author.displayName },
         linkedCommit: null,
@@ -167,7 +285,7 @@ export function createLocalBackend() {
     },
 
     async updateTicket(wsId, ticketId, patch, actor, activityEntry) {
-      assertMember(wsId);
+      assertMember(wsId, ['developer']);
       store.update(`${wsPath(wsId)}/tickets/${ticketId}`, (t) => ({
         ...patch,
         activity: activityEntry ? [...(t.activity || []), { ...activityEntry, by: actor.displayName, at: Date.now() }] : t.activity,
@@ -175,8 +293,75 @@ export function createLocalBackend() {
       }));
     },
 
+    subscribeMilestones(wsId, cb) {
+      return store.watch(() => store.list(`${wsPath(wsId)}/milestones`).sort(byAsc('order')), cb);
+    },
+
+    async createMilestone(wsId, { title, description = '', targetDate = null, order = 0 }, uid) {
+      assertMember(wsId, ['owner']);
+      const id = generateId();
+      const now = Date.now();
+      store.set(`${wsPath(wsId)}/milestones/${id}`, {
+        title: title.trim(),
+        description: description.trim(),
+        targetDate: targetDate || null,
+        order,
+        progress: 0,
+        status: 'planned',
+        linkedUpdateIds: [],
+        linkedTicketIds: [],
+        createdBy: uid,
+        createdAt: now,
+        updatedAt: now,
+      });
+      return id;
+    },
+
+    async updateMilestone(wsId, milestoneId, patch) {
+      const { role } = assertMember(wsId, ['owner', 'developer']);
+      if (role === 'developer') {
+        const allowed = ['progress', 'status', 'linkedUpdateIds', 'linkedTicketIds'];
+        const clean = Object.fromEntries(Object.entries(patch).filter(([k]) => allowed.includes(k)));
+        store.update(`${wsPath(wsId)}/milestones/${milestoneId}`, { ...clean, updatedAt: Date.now() });
+      } else {
+        store.update(`${wsPath(wsId)}/milestones/${milestoneId}`, { ...patch, updatedAt: Date.now() });
+      }
+    },
+
+    async deleteMilestone(wsId, milestoneId) {
+      assertMember(wsId, ['owner']);
+      store.remove(`${wsPath(wsId)}/milestones/${milestoneId}`);
+    },
+
+    subscribeBudgetLogs(wsId, cb) {
+      return store.watch(() => store.list(`${wsPath(wsId)}/budgetLogs`).sort(byDesc('loggedAt')), cb);
+    },
+
+    async logBudgetHours(wsId, { hours, description, ticketId = null, updateId = null }, author) {
+      assertMember(wsId, ['developer']);
+      const id = generateId();
+      store.set(`${wsPath(wsId)}/budgetLogs/${id}`, {
+        hours: Number(hours),
+        description: description.trim(),
+        ticketId: ticketId || null,
+        updateId: updateId || null,
+        loggedBy: { uid: author.uid, name: author.displayName },
+        loggedAt: Date.now(),
+      });
+      return id;
+    },
+
+    async deleteBudgetLog(wsId, logId) {
+      assertMember(wsId, ['owner']);
+      store.remove(`${wsPath(wsId)}/budgetLogs/${logId}`);
+    },
+
+    subscribeWeeklyDigests(wsId, cb) {
+      return store.watch(() => store.list(`${wsPath(wsId)}/weeklyDigests`).sort(byDesc('createdAt')), cb);
+    },
+
     async startGithubInstall(wsId) {
-      const ws = assertMember(wsId);
+      const { ws } = assertMember(wsId, ['developer']);
       await delay(1200);
       const login = ws.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'my-company';
       const repos = ['web-app', 'mobile-app', 'marketing-site'].map((name, i) => ({
@@ -194,23 +379,27 @@ export function createLocalBackend() {
     },
 
     async selectRepository(wsId, repoId) {
-      const ws = assertMember(wsId);
+      const { ws } = assertMember(wsId, ['developer']);
       const repo = ws.github?.repos?.find((r) => r.id === repoId);
       if (!repo) throw new Error('Repository not found in this installation');
       store.update(wsPath(wsId), { github: { ...ws.github, selectedRepo: repo, status: 'connected', connectedAt: Date.now() } });
     },
 
     async disconnectGithub(wsId) {
-      assertMember(wsId);
+      assertMember(wsId, ['developer']);
       store.update(wsPath(wsId), { github: null });
     },
 
     subscribeWebhookLogs(wsId, cb) {
-      return store.watch(() => store.list(`${wsPath(wsId)}/webhookLogs`).sort(byDesc('receivedAt')).slice(0, 50), cb);
+      return store.watch(() => {
+        const ws = store.get(wsPath(wsId));
+        if (ws?.members?.[persona().uid] !== 'developer') return [];
+        return store.list(`${wsPath(wsId)}/webhookLogs`).sort(byDesc('receivedAt')).slice(0, 50);
+      }, cb);
     },
 
     async simulateEvent(wsId) {
-      const ws = assertMember(wsId);
+      const { ws } = assertMember(wsId, ['developer']);
       const repo = ws.github?.selectedRepo;
       if (!repo) throw new Error('Connect a GitHub repository first');
       const started = Date.now();
@@ -226,7 +415,14 @@ export function createLocalBackend() {
       change.stats.deletions ??= Math.floor(Math.random() * 60);
       await delay(1100);
       const summary = heuristicTranslate(change);
-      store.set(`${wsPath(wsId)}/updates/${generateId()}`, { ...buildUpdateDoc(change, summary, { deliveryId }), createdAt: Date.now() });
+      store.set(`${wsPath(wsId)}/updates/${generateId()}`, {
+        ...buildUpdateDoc(change, summary, { deliveryId }),
+        approvalStatus: 'pending',
+        approvedBy: null,
+        approvedAt: null,
+        approvalNote: null,
+        createdAt: Date.now(),
+      });
       store.update(`${wsPath(wsId)}/webhookLogs/${logId}`, {
         status: 'processed',
         message: `Translated ${change.commits.length} commit(s) on ${change.branch}`,

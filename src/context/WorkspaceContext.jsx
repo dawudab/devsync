@@ -4,18 +4,17 @@ import { useAuth } from './AuthContext';
 
 const WorkspaceContext = createContext(null);
 const ACTIVE_KEY = 'devsync:active-workspace';
-const VIEW_KEY = 'devsync:view-mode';
 
 /**
  * Holds the active tenant. Every data subscription in the app is keyed by `workspaceId`,
  * and the router outlet is re-mounted when it changes so no state leaks between workspaces.
+ * Role is strictly locked per workspace ('owner' | 'team_member' | 'developer').
  */
 export function WorkspaceProvider({ children }) {
   const { user } = useAuth();
   const [workspaces, setWorkspaces] = useState(null);
   const [activeId, setActiveId] = useState(() => localStorage.getItem(ACTIVE_KEY));
   const [workspace, setWorkspace] = useState(undefined);
-  const [viewMode, setViewModeState] = useState(() => localStorage.getItem(VIEW_KEY) || 'owner');
 
   useEffect(() => {
     if (!user) {
@@ -44,12 +43,6 @@ export function WorkspaceProvider({ children }) {
     setActiveId(id);
   }, []);
 
-  const setViewMode = useCallback((mode) => {
-    localStorage.setItem(VIEW_KEY, mode);
-    setViewModeState(mode);
-    backend.setDemoPersona?.(mode);
-  }, []);
-
   const value = useMemo(() => {
     const role = workspace?.members?.[user?.uid] || null;
     return {
@@ -58,13 +51,13 @@ export function WorkspaceProvider({ children }) {
       workspace,
       loading: workspaces === null || (resolvedId && workspace === undefined),
       role,
-      viewMode,
-      isDevView: viewMode === 'developer',
-      setViewMode,
+      isOwner: role === 'owner',
+      isTeamMember: role === 'team_member',
+      isDeveloper: role === 'developer',
       switchWorkspace,
-      author: user ? { uid: user.uid, displayName: user.displayName, photoURL: user.photoURL, role: role || viewMode } : null,
+      author: user ? { uid: user.uid, displayName: user.displayName, photoURL: user.photoURL, role: role || 'team_member' } : null,
     };
-  }, [workspaces, resolvedId, workspace, user, viewMode, setViewMode, switchWorkspace]);
+  }, [workspaces, resolvedId, workspace, user, switchWorkspace]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Check, ChevronDown, Plus, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useWorkspace } from '@/context/WorkspaceContext';
+import { roleMeta } from '@/lib/constants';
 import { Sheet } from '@/components/ui/Sheet';
 import { cn } from '@/lib/utils';
 
@@ -45,7 +46,7 @@ export function WorkspaceSwitcher() {
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-sm font-bold text-brand-700 ring-1 ring-ink-200">{w.name.charAt(0)}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium text-ink-900">{w.name}</span>
-                  <span className="text-xs capitalize text-ink-500">{w.role}</span>
+                  <span className="text-xs text-ink-500">{roleMeta(w.role).label}</span>
                 </span>
                 {w.id === workspaceId && <Check className="h-5 w-5 text-brand-600" />}
               </button>

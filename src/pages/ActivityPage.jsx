@@ -10,8 +10,8 @@ import { SimulateEventButton } from '@/components/dev/SimulateEventButton';
 import { formatDateTime } from '@/lib/utils';
 
 export function ActivityPage() {
-  const { isDevView, workspace } = useWorkspace();
-  if (!isDevView) return <Navigate to="/" replace />;
+  const { isDeveloper, workspace } = useWorkspace();
+  if (!isDeveloper) return <Navigate to="/" replace />;
   const gh = workspace?.github;
 
   return (

@@ -14,7 +14,7 @@ import { CardSkeleton, EmptyState } from '@/components/ui/Feedback';
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
 
 export function RequestsPage() {
-  const { isDevView } = useWorkspace();
+  const { isDeveloper, isTeamMember } = useWorkspace();
   const { tickets, loading } = useTickets();
   const [creating, setCreating] = useState(false);
   const [openId, setOpenId] = useState(null);
@@ -46,11 +46,17 @@ export function RequestsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={isDevView ? 'Ticket board' : 'Requests'}
-        subtitle={isDevView ? 'Change requests from the business owner, sorted by priority.' : 'Ask for changes without touching GitHub.'}
+        title={isDeveloper ? 'Ticket board' : 'Requests & Ideas'}
+        subtitle={
+          isDeveloper
+            ? 'Change requests and team suggestions, sorted by priority.'
+            : isTeamMember
+              ? 'Share suggestions and track approved work.'
+              : 'Submit official change requests without touching GitHub.'
+        }
         action={
           <Button size="sm" icon={Plus} onClick={() => setCreating(true)} className="hidden sm:inline-flex">
-            New request
+            {isTeamMember ? 'New suggestion' : 'New request'}
           </Button>
         }
       />
@@ -60,10 +66,10 @@ export function RequestsPage() {
           <CardSkeleton />
         </div>
       ) : tickets.length === 0 ? (
-        <EmptyState icon={ClipboardList} title="No requests yet" action={<Button icon={Plus} onClick={() => setCreating(true)}>Create the first request</Button>}>
+        <EmptyState icon={ClipboardList} title="No requests yet" action={<Button icon={Plus} onClick={() => setCreating(true)}>{isTeamMember ? 'Share first suggestion' : 'Create the first request'}</Button>}>
           Need a new feature, a fix, or a text change? Send it here and track progress in one place.
         </EmptyState>
-      ) : isDevView ? (
+      ) : isDeveloper ? (
         <div className="space-y-6">
           {devGroups.map((g) => {
             const Icon = STATUS_ICONS[g.value];

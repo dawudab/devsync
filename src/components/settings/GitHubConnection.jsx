@@ -38,13 +38,13 @@ function RepoPicker({ repos, selectedId, onSelect, busyId }) {
 }
 
 export function GitHubConnection() {
-  const { workspaceId, workspace, role, isDevView } = useWorkspace();
+  const { workspaceId, workspace, isDeveloper } = useWorkspace();
   const toast = useToast();
   const [connecting, setConnecting] = useState(false);
   const [busyRepo, setBusyRepo] = useState(null);
   const [changing, setChanging] = useState(false);
   const gh = workspace?.github;
-  const canManage = role === 'owner' || backend.mode === 'demo';
+  const canManage = isDeveloper;
 
   const connect = async () => {
     setConnecting(true);
@@ -103,7 +103,7 @@ export function GitHubConnection() {
         <Button variant="dark" size="lg" icon={Github} loading={connecting} onClick={connect} disabled={!canManage} className="w-full">
           Install GitHub App
         </Button>
-        {!canManage && <p className="text-center text-xs text-ink-500">Only the workspace owner can connect GitHub.</p>}
+        {!canManage && <p className="text-center text-xs text-ink-500">Only a workspace developer can connect GitHub.</p>}
       </div>
     );
   }
@@ -142,7 +142,7 @@ export function GitHubConnection() {
         </Badge>
       </div>
 
-      {isDevView && (
+      {isDeveloper && (
         <dl className="grid grid-cols-2 gap-2 font-mono text-[11.5px]">
           {[
             ['installation_id', gh.installationId],

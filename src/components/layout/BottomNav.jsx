@@ -1,18 +1,19 @@
 import { NavLink } from 'react-router-dom';
-import { Newspaper, ClipboardList, Activity, Settings } from 'lucide-react';
+import { Newspaper, Map as MapIcon, ClipboardList, Activity, Settings } from 'lucide-react';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { useTickets } from '@/hooks/useWorkspaceData';
 import { cn } from '@/lib/utils';
 
 export function BottomNav() {
-  const { isDevView } = useWorkspace();
+  const { isDeveloper } = useWorkspace();
   const { tickets } = useTickets();
   const openTickets = tickets.filter((t) => t.status !== 'completed').length;
 
   const items = [
     { to: '/', label: 'Feed', icon: Newspaper, end: true },
+    { to: '/roadmap', label: 'Roadmap', icon: MapIcon },
     { to: '/requests', label: 'Requests', icon: ClipboardList, badge: openTickets },
-    ...(isDevView ? [{ to: '/activity', label: 'Webhooks', icon: Activity }] : []),
+    ...(isDeveloper ? [{ to: '/activity', label: 'Webhooks', icon: Activity }] : []),
     { to: '/settings', label: 'Settings', icon: Settings },
   ];
 
@@ -30,10 +31,10 @@ export function BottomNav() {
             >
               {({ isActive }) => (
                 <>
-                  <span className={cn('relative flex h-8 w-14 items-center justify-center rounded-full transition-colors', isActive && 'bg-brand-50')}>
-                    <Icon className="h-[22px] w-[22px]" strokeWidth={isActive ? 2.25 : 1.75} />
+                  <span className={cn('relative flex h-8 w-12 items-center justify-center rounded-full transition-colors', isActive && 'bg-brand-50')}>
+                    <Icon className="h-[21px] w-[21px]" strokeWidth={isActive ? 2.25 : 1.75} />
                     {badge > 0 && (
-                      <span className="absolute right-2 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white ring-2 ring-white">
+                      <span className="absolute right-1.5 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white ring-2 ring-white">
                         {badge}
                       </span>
                     )}

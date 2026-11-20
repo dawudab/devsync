@@ -10,6 +10,7 @@ import {
   arrayRemove,
   arrayUnion,
   collection,
+  deleteDoc,
   doc,
   FieldPath,
   increment,
@@ -19,17 +20,19 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  setDoc,
   updateDoc,
+  where,
   writeBatch,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { getFirebase } from '@/config/firebase';
-import { generateInviteCode } from './ids';
+import { generateInviteCode, generateShortInviteCode } from './ids';
 
 function toPlain(snap) {
   const data = snap.data({ serverTimestamps: 'estimate' });
   const out = { id: snap.id, ...data };
-  for (const key of ['createdAt', 'updatedAt', 'receivedAt', 'connectedAt']) {
+  for (const key of ['createdAt', 'updatedAt', 'receivedAt', 'connectedAt', 'approvedAt', 'loggedAt', 'joinedAt']) {
     if (data?.[key]?.toMillis) out[key] = data[key].toMillis();
   }
   if (data?.github?.connectedAt?.toMillis) out.github = { ...data.github, connectedAt: data.github.connectedAt.toMillis() };
@@ -108,22 +111,40 @@ export function createFirestoreBackend() {
       return onSnapshot(ws(wsId), (snap) => cb(snap.exists() ? toPlain(snap) : null), () => cb(null));
     },
 
-    async createWorkspace(user, name) {
+    async createWorkspace(user, name, creatorRole = 'owner', extras = {}) {
+      const role = creatorRole === 'developer' ? 'developer' : 'owner';
       const ref = doc(collection(db, 'workspaces'));
       const batch = writeBatch(db);
       batch.set(ref, {
         name: name.trim(),
-        ownerId: user.uid,
-        members: { [user.uid]: 'owner' },
-        profiles: { [user.uid]: { name: user.displayName || 'Owner', photoURL: user.photoURL || null } },
+        ownerId: role === 'owner' ? user.uid : null,
+        members: { [user.uid]: role },
+        profiles: { [user.uid]: { name: user.displayName || (role === 'owner' ? 'Owner' : 'Developer'), photoURL: user.photoURL || null } },
         inviteCode: generateInviteCode(),
         ticketCounter: 0,
         github: null,
+        businessProfile: extras.businessProfile || { tagline: '', industry: '' },
+        workspaceLinks: extras.workspaceLinks || { productionUrl: '', stagingUrl: '', designUrl: '' },
+        budget: extras.budget || { hourlyRate: 120, monthlyBudget: 4800, currency: 'USD' },
         createdAt: serverTimestamp(),
+      });
+      batch.set(doc(ws(ref.id), 'members', user.uid), {
+        role,
+        displayName: user.displayName || (role === 'owner' ? 'Owner' : 'Developer'),
+        photoURL: user.photoURL || null,
+        joinedAt: serverTimestamp(),
       });
       batch.set(doc(db, 'users', user.uid), { workspaceIds: arrayUnion(ref.id) }, { merge: true });
       await batch.commit();
       return ref.id;
+    },
+
+    async updateWorkspace(wsId, patch) {
+      await updateDoc(ws(wsId), patch);
+    },
+
+    async deleteWorkspace(wsId) {
+      await deleteDoc(ws(wsId));
     },
 
     async joinWorkspace(code) {
@@ -131,12 +152,46 @@ export function createFirestoreBackend() {
       return workspaceId;
     },
 
+    subscribeInvites(wsId, cb) {
+      return listen(query(collection(db, 'invites'), where('workspaceId', '==', wsId)), cb);
+    },
+
+    async createInvite(wsId, workspaceName, role, creatorUid) {
+      const code = generateShortInviteCode();
+      await setDoc(doc(db, 'invites', code), {
+        code,
+        workspaceId: wsId,
+        workspaceName,
+        role,
+        createdBy: creatorUid,
+        usedBy: null,
+        createdAt: serverTimestamp(),
+      });
+      return code;
+    },
+
+    async deleteInvite(code) {
+      await deleteDoc(doc(db, 'invites', code));
+    },
+
+    updateMemberRole: (wsId, targetUid, role) => call('updateMemberRole', { workspaceId: wsId, targetUid, role }),
+    removeMember: (wsId, targetUid) => call('removeMember', { workspaceId: wsId, targetUid }),
+
     subscribeUpdates(wsId, cb) {
       return listen(query(collection(ws(wsId), 'updates'), orderBy('createdAt', 'desc'), limit(100)), cb);
     },
 
     async toggleReaction(wsId, updateId, emoji, uid, active) {
       await updateDoc(doc(ws(wsId), 'updates', updateId), new FieldPath('reactions', emoji), active ? arrayRemove(uid) : arrayUnion(uid));
+    },
+
+    async setUpdateApproval(wsId, updateId, { approvalStatus, approvalNote = null }, author) {
+      await updateDoc(doc(ws(wsId), 'updates', updateId), {
+        approvalStatus,
+        approvalNote: approvalNote || null,
+        approvedBy: { uid: author.uid, name: author.displayName },
+        approvedAt: serverTimestamp(),
+      });
     },
 
     retranslateUpdate: (wsId, updateId) => call('retranslateUpdate', { workspaceId: wsId, updateId }),
@@ -166,7 +221,7 @@ export function createFirestoreBackend() {
       return listen(query(collection(ws(wsId), 'tickets'), orderBy('createdAt', 'desc')), cb);
     },
 
-    async createTicket(wsId, { title, description, priority }, author) {
+    async createTicket(wsId, { title, description, priority, kind = 'change_request', milestoneId = null }, author) {
       return runTransaction(db, async (tx) => {
         const wsSnap = await tx.get(ws(wsId));
         const number = (wsSnap.data()?.ticketCounter || 0) + 1;
@@ -177,6 +232,8 @@ export function createFirestoreBackend() {
           title: title.trim(),
           description: description.trim(),
           priority,
+          kind,
+          milestoneId: milestoneId || null,
           status: 'todo',
           createdBy: { uid: author.uid, name: author.displayName },
           linkedCommit: null,
@@ -194,6 +251,61 @@ export function createFirestoreBackend() {
         ...(activityEntry ? { activity: arrayUnion({ ...activityEntry, by: actor.displayName, at: Date.now() }) } : {}),
         updatedAt: serverTimestamp(),
       });
+    },
+
+    subscribeMilestones(wsId, cb) {
+      return listen(query(collection(ws(wsId), 'milestones'), orderBy('order', 'asc')), cb);
+    },
+
+    async createMilestone(wsId, { title, description = '', targetDate = null, order = 0 }, uid) {
+      const ref = doc(collection(ws(wsId), 'milestones'));
+      await setDoc(ref, {
+        title: title.trim(),
+        description: description.trim(),
+        targetDate: targetDate || null,
+        order,
+        progress: 0,
+        status: 'planned',
+        linkedUpdateIds: [],
+        linkedTicketIds: [],
+        createdBy: uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      return ref.id;
+    },
+
+    async updateMilestone(wsId, milestoneId, patch) {
+      await updateDoc(doc(ws(wsId), 'milestones', milestoneId), { ...patch, updatedAt: serverTimestamp() });
+    },
+
+    async deleteMilestone(wsId, milestoneId) {
+      await deleteDoc(doc(ws(wsId), 'milestones', milestoneId));
+    },
+
+    subscribeBudgetLogs(wsId, cb) {
+      return listen(query(collection(ws(wsId), 'budgetLogs'), orderBy('loggedAt', 'desc')), cb);
+    },
+
+    async logBudgetHours(wsId, { hours, description, ticketId = null, updateId = null }, author) {
+      const ref = doc(collection(ws(wsId), 'budgetLogs'));
+      await setDoc(ref, {
+        hours: Number(hours),
+        description: description.trim(),
+        ticketId: ticketId || null,
+        updateId: updateId || null,
+        loggedBy: { uid: author.uid, name: author.displayName },
+        loggedAt: serverTimestamp(),
+      });
+      return ref.id;
+    },
+
+    async deleteBudgetLog(wsId, logId) {
+      await deleteDoc(doc(ws(wsId), 'budgetLogs', logId));
+    },
+
+    subscribeWeeklyDigests(wsId, cb) {
+      return listen(query(collection(ws(wsId), 'weeklyDigests'), orderBy('createdAt', 'desc'), limit(10)), cb);
     },
 
     async startGithubInstall(wsId) {

@@ -36,3 +36,30 @@ export const TICKET_PRIORITIES = [
 
 export const statusMeta = (value) => TICKET_STATUSES.find((s) => s.value === value) || TICKET_STATUSES[0];
 export const priorityMeta = (value) => TICKET_PRIORITIES.find((p) => p.value === value) || TICKET_PRIORITIES[1];
+
+export const ROLES = {
+  owner: { value: 'owner', label: 'Business Owner', short: 'Owner', tone: 'brand' },
+  team_member: { value: 'team_member', label: 'Team Member', short: 'Team', tone: 'violet' },
+  developer: { value: 'developer', label: 'Developer', short: 'Developer', tone: 'emerald' },
+};
+
+export const roleMeta = (value) => ROLES[value] || ROLES.team_member;
+
+export const APPROVAL_STATUSES = {
+  pending: { value: 'pending', label: 'Needs sign-off', tone: 'amber' },
+  approved: { value: 'approved', label: 'Approved', tone: 'emerald' },
+  changes_requested: { value: 'changes_requested', label: 'Tweaks requested', tone: 'rose' },
+};
+
+export const approvalMeta = (value) => APPROVAL_STATUSES[value] || APPROVAL_STATUSES.pending;
+
+export const TICKET_KINDS = {
+  change_request: { value: 'change_request', label: 'Change Request', tone: 'brand' },
+  suggestion: { value: 'suggestion', label: 'Suggestion / Idea', tone: 'violet' },
+};
+
+export const MILESTONE_STATUSES = [
+  { value: 'planned', label: 'Planned', tone: 'ink' },
+  { value: 'in_progress', label: 'In Progress', tone: 'sky' },
+  { value: 'completed', label: 'Completed', tone: 'emerald' },
+];

@@ -5,9 +5,12 @@ import { Github } from '@/components/ui/GithubIcon';
 import { useNow } from '@/hooks/useNow';
 import { useAuth } from '@/context/AuthContext';
 import { useWorkspace } from '@/context/WorkspaceContext';
-import { useFeed, useTickets } from '@/hooks/useWorkspaceData';
+import { useFeed, useTickets, useMilestones, useBudgetLogs, useWeeklyDigests } from '@/hooks/useWorkspaceData';
 import { FeedCard } from '@/components/feed/FeedCard';
 import { DevStats } from '@/components/feed/DevStats';
+import { ExecutiveDigestCard } from '@/components/feed/ExecutiveDigestCard';
+import { LiveLinksBar } from '@/components/feed/LiveLinksBar';
+import { BudgetTrackerCard } from '@/components/feed/BudgetTrackerCard';
 import { SimulateEventButton } from '@/components/dev/SimulateEventButton';
 import { CardSkeleton, EmptyState } from '@/components/ui/Feedback';
 import { Button } from '@/components/ui/Button';
@@ -64,9 +67,12 @@ function OwnerOverview({ updates, tickets }) {
 
 export function FeedPage() {
   const { user } = useAuth();
-  const { workspace, isDevView } = useWorkspace();
+  const { workspace, isDeveloper } = useWorkspace();
   const { updates, loading } = useFeed();
   const { tickets } = useTickets();
+  const { milestones } = useMilestones();
+  const { logs: budgetLogs } = useBudgetLogs();
+  const { digests } = useWeeklyDigests();
   const [filter, setFilter] = useState('all');
   const { hash } = useLocation();
   const highlightId = hash.startsWith('#update-') ? hash.slice(8) : null;
@@ -81,17 +87,27 @@ export function FeedPage() {
 
   return (
     <div className="space-y-5">
-      {isDevView ? (
+      {isDeveloper ? (
         <PageHeader
-          title="Activity"
+          title="Developer Feed"
           subtitle={repo ? <span className="font-mono text-xs">{repo.fullName}</span> : 'No repository connected'}
           action={repo && <SimulateEventButton />}
         />
       ) : (
-        <PageHeader title={greeting(user?.displayName)} subtitle="Here’s what your team has been working on." />
+        <PageHeader title={greeting(user?.displayName)} subtitle={workspace?.businessProfile?.tagline || 'Executive overview & recent product updates.'} />
       )}
 
-      {!repo && (
+      {!isDeveloper && (
+        <>
+          <ExecutiveDigestCard updates={updates} milestones={milestones} digests={digests} />
+          <LiveLinksBar />
+          <BudgetTrackerCard logs={budgetLogs} />
+        </>
+      )}
+
+      {isDeveloper && <BudgetTrackerCard logs={budgetLogs} />}
+
+      {!repo && isDeveloper && (
         <EmptyState
           icon={Github}
           title="Connect your GitHub repository"
@@ -101,13 +117,19 @@ export function FeedPage() {
             </Link>
           }
         >
-          Install the DevSync GitHub App so updates appear here automatically — explained in plain English.
+          Install the DevSync GitHub App so code pushes and PRs appear in the workspace feed automatically.
         </EmptyState>
       )}
 
-      {repo && (isDevView ? <DevStats updates={updates} /> : <OwnerOverview updates={updates} tickets={tickets} />)}
+      {!repo && !isDeveloper && (
+        <EmptyState icon={Inbox} title="Waiting for developer connection">
+          Once your developer connects the project repository, plain-English updates will appear here automatically.
+        </EmptyState>
+      )}
 
-      {repo && !isDevView && updates.length > 0 && (
+      {repo && (isDeveloper ? <DevStats updates={updates} /> : <OwnerOverview updates={updates} tickets={tickets} />)}
+
+      {repo && !isDeveloper && updates.length > 0 && (
         <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
           {FILTERS.map((f) => (
             <button
@@ -131,8 +153,8 @@ export function FeedPage() {
             <CardSkeleton />
           </>
         ) : repo && visible.length === 0 ? (
-          <EmptyState icon={Inbox} title={updates.length ? 'Nothing in this category yet' : 'Waiting for the first update'} action={!updates.length && isDevView && <SimulateEventButton />}>
-            {updates.length ? 'Try another filter.' : 'As soon as your developer pushes code, a plain-English summary will appear here.'}
+          <EmptyState icon={Inbox} title={updates.length ? 'Nothing in this category yet' : 'Waiting for the first update'} action={!updates.length && isDeveloper && <SimulateEventButton />}>
+            {updates.length ? 'Try another filter.' : 'As soon as code is pushed, a plain-English summary will appear here.'}
           </EmptyState>
         ) : (
           visible.map((u, i) => <FeedCard key={u.id} update={u} highlighted={u.id === highlightId} style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }} />)

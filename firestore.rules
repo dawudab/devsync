@@ -1,10 +1,10 @@
 rules_version = '2';
 
-// DevSync multi-tenant security model
+// DevSync multi-tenant RBAC security model
 // - Every tenant lives under /workspaces/{workspaceId}. Access is granted only when the caller's
-//   uid is a key of that workspace's `members` map. There are no cross-workspace queries.
+//   uid is a key of that workspace's `members` map with a locked role ('owner', 'team_member', 'developer').
 // - Feed updates, webhook logs, installation links and GitHub metadata are written exclusively by
-//   Cloud Functions (Admin SDK bypasses rules). Clients can only react, comment, and manage tickets.
+//   Cloud Functions (Admin SDK bypasses rules).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -47,37 +47,83 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // 6-character role-locked invite tokens. Joining goes through joinWorkspace Cloud Function.
+    match /invites/{code} {
+      allow read: if isMember(resource.data.workspaceId);
+      allow create: if signedIn()
+        && isMember(request.resource.data.workspaceId)
+        && request.resource.data.keys().hasOnly(['code', 'workspaceId', 'workspaceName', 'role', 'createdBy', 'usedBy', 'createdAt'])
+        && request.resource.data.code == code
+        && request.resource.data.code.matches('^[A-Z0-9]{6}$')
+        && request.resource.data.role in ['owner', 'team_member', 'developer']
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.usedBy == null
+        && request.resource.data.createdAt == request.time
+        && (
+          roleIn(request.resource.data.workspaceId) == 'owner'
+          || (roleIn(request.resource.data.workspaceId) == 'developer' && request.resource.data.role == 'owner')
+        );
+      allow delete: if isMember(resource.data.workspaceId)
+        && (roleIn(resource.data.workspaceId) == 'owner' || resource.data.createdBy == request.auth.uid);
+      allow update: if false;
+    }
+
     match /workspaces/{wsId} {
       allow read: if signedIn() && request.auth.uid in resource.data.members;
 
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['name', 'ownerId', 'members', 'profiles', 'inviteCode', 'ticketCounter', 'github', 'createdAt'])
-        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'name', 'ownerId', 'members', 'profiles', 'inviteCode', 'ticketCounter',
+          'github', 'businessProfile', 'workspaceLinks', 'budget', 'createdAt'
+        ])
         && request.resource.data.members.keys().hasOnly([request.auth.uid])
-        && request.resource.data.members[request.auth.uid] == 'owner'
         && request.resource.data.profiles.keys().hasOnly([request.auth.uid])
+        && (
+          (request.resource.data.members[request.auth.uid] == 'owner' && request.resource.data.ownerId == request.auth.uid)
+          || (request.resource.data.members[request.auth.uid] == 'developer' && request.resource.data.ownerId == null)
+        )
         && isStr(request.resource.data.name, 2, 60)
-        && request.resource.data.inviteCode.matches('^[A-Z0-9]{4}-[A-Z0-9]{4}$')
         && request.resource.data.ticketCounter == 0
         && request.resource.data.github == null
         && request.resource.data.createdAt == request.time;
 
       allow update: if signedIn() && request.auth.uid in resource.data.members && (
-        // owner can rename
-        (resource.data.members[request.auth.uid] == 'owner' && onlyChanges(['name']) && isStr(request.resource.data.name, 2, 60))
+        // owner can update business metadata, links, and budget
+        (resource.data.members[request.auth.uid] == 'owner'
+          && onlyChanges(['name', 'businessProfile', 'workspaceLinks', 'budget'])
+          && isStr(request.resource.data.name, 2, 60))
         // any member can allocate the next ticket number (inside the createTicket transaction)
         || (onlyChanges(['ticketCounter']) && request.resource.data.ticketCounter == resource.data.ticketCounter + 1)
       );
 
-      allow delete: if false;
+      allow delete: if signedIn() && resource.data.members[request.auth.uid] == 'owner';
+
+      match /members/{memberUid} {
+        allow read: if isMember(wsId);
+        allow create: if signedIn()
+          && request.auth.uid == memberUid
+          && request.auth.uid in getAfter(/databases/$(database)/documents/workspaces/$(wsId)).data.members
+          && request.resource.data.role == getAfter(/databases/$(database)/documents/workspaces/$(wsId)).data.members[request.auth.uid];
+        allow update: if isMember(wsId)
+          && roleIn(wsId) == 'owner'
+          && memberUid != request.auth.uid
+          && request.resource.data.role in ['owner', 'team_member', 'developer'];
+        allow delete: if isMember(wsId)
+          && roleIn(wsId) == 'owner'
+          && memberUid != request.auth.uid;
+      }
 
       match /updates/{updateId} {
         allow read: if isMember(wsId);
         allow create, delete: if false;
-        allow update: if isMember(wsId)
-          && onlyChanges(['reactions', 'commentCount'])
-          && request.resource.data.reactions.keys().hasOnly(['👍', '🚀', '❤️', '👀'])
-          && request.resource.data.commentCount - resource.data.commentCount in [0, 1];
+        allow update: if isMember(wsId) && (
+          (onlyChanges(['reactions', 'commentCount'])
+            && request.resource.data.reactions.keys().hasOnly(['👍', '🚀', '❤️', '👀'])
+            && request.resource.data.commentCount - resource.data.commentCount in [0, 1])
+          || (roleIn(wsId) == 'owner'
+            && onlyChanges(['approvalStatus', 'approvedBy', 'approvedAt', 'approvalNote'])
+            && request.resource.data.approvalStatus in ['pending', 'approved', 'changes_requested'])
+        );
 
         match /comments/{commentId} {
           allow read: if isMember(wsId);
@@ -96,20 +142,27 @@ service cloud.firestore {
       match /tickets/{ticketId} {
         allow read: if isMember(wsId);
         allow create: if isMember(wsId)
-          && request.resource.data.keys().hasOnly(['number', 'title', 'description', 'priority', 'status', 'createdBy', 'linkedCommit', 'activity', 'createdAt', 'updatedAt'])
+          && request.resource.data.keys().hasOnly([
+            'number', 'title', 'description', 'priority', 'kind', 'milestoneId',
+            'status', 'createdBy', 'linkedCommit', 'activity', 'createdAt', 'updatedAt'
+          ])
           && request.resource.data.number == getAfter(/databases/$(database)/documents/workspaces/$(wsId)).data.ticketCounter
           && request.resource.data.createdBy.uid == request.auth.uid
           && isStr(request.resource.data.title, 1, 120)
           && isStr(request.resource.data.description, 0, 4000)
           && request.resource.data.priority in ['low', 'medium', 'high']
+          && (
+            (roleIn(wsId) == 'team_member' && request.resource.data.kind == 'suggestion')
+            || (roleIn(wsId) in ['owner', 'developer'] && request.resource.data.kind in ['change_request', 'suggestion'])
+          )
           && request.resource.data.status == 'todo'
           && request.resource.data.linkedCommit == null
           && request.resource.data.activity.size() == 1
           && request.resource.data.createdAt == request.time;
-        // Status changes & commit links. To restrict to developers only, add:
-        //   && roleIn(wsId) == 'developer'
+
         allow update: if isMember(wsId)
-          && onlyChanges(['status', 'linkedCommit', 'activity', 'updatedAt'])
+          && roleIn(wsId) == 'developer'
+          && onlyChanges(['status', 'linkedCommit', 'milestoneId', 'activity', 'updatedAt'])
           && request.resource.data.status in ['todo', 'in_progress', 'completed']
           && request.resource.data.activity.size() >= resource.data.activity.size()
           && request.resource.data.activity.size() <= 200
@@ -117,8 +170,39 @@ service cloud.firestore {
         allow delete: if false;
       }
 
-      match /webhookLogs/{logId} {
+      match /milestones/{milestoneId} {
         allow read: if isMember(wsId);
+        allow create, delete: if isMember(wsId) && roleIn(wsId) == 'owner';
+        allow update: if isMember(wsId) && (
+          roleIn(wsId) == 'owner'
+          || (roleIn(wsId) == 'developer'
+            && onlyChanges(['progress', 'status', 'linkedUpdateIds', 'linkedTicketIds', 'updatedAt'])
+            && request.resource.data.progress is number
+            && request.resource.data.progress >= 0
+            && request.resource.data.progress <= 100
+            && request.resource.data.status in ['planned', 'in_progress', 'completed'])
+        );
+      }
+
+      match /budgetLogs/{logId} {
+        allow read: if isMember(wsId);
+        allow create: if isMember(wsId)
+          && roleIn(wsId) == 'developer'
+          && request.resource.data.loggedBy.uid == request.auth.uid
+          && request.resource.data.hours is number
+          && request.resource.data.hours > 0
+          && request.resource.data.hours <= 100
+          && isStr(request.resource.data.description, 1, 300);
+        allow update, delete: if isMember(wsId) && roleIn(wsId) == 'owner';
+      }
+
+      match /weeklyDigests/{digestId} {
+        allow read: if isMember(wsId);
+        allow write: if false;
+      }
+
+      match /webhookLogs/{logId} {
+        allow read: if isMember(wsId) && roleIn(wsId) == 'developer';
         allow write: if false;
       }
     }

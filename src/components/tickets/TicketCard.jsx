@@ -1,5 +1,6 @@
-import { GitCommitHorizontal, ChevronRight } from 'lucide-react';
+import { GitCommitHorizontal, ChevronRight, Lightbulb } from 'lucide-react';
 import { PriorityBadge, StatusBadge } from './TicketBadges';
+import { Badge } from '@/components/ui/Badge';
 import { cn, shortSha, timeAgo } from '@/lib/utils';
 
 export function TicketCard({ ticket, onOpen, technical = false }) {
@@ -16,6 +17,11 @@ export function TicketCard({ ticket, onOpen, technical = false }) {
           <span className="font-mono text-xs text-ink-400">#{ticket.number}</span>
           <StatusBadge status={ticket.status} />
           <PriorityBadge priority={ticket.priority} />
+          {ticket.kind === 'suggestion' && (
+            <Badge tone="violet">
+              <Lightbulb className="h-3 w-3" /> Suggestion
+            </Badge>
+          )}
         </div>
         <h3 className={cn('font-semibold leading-snug text-ink-900', ticket.status === 'completed' && 'line-through decoration-ink-300')}>{ticket.title}</h3>
         {ticket.description && <p className="mt-1 line-clamp-2 text-sm text-ink-500">{ticket.description}</p>}

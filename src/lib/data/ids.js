@@ -9,6 +9,10 @@ export function generateInviteCode() {
   return `${randomChars(4, ALPHABET)}-${randomChars(4, ALPHABET)}`;
 }
 
+export function generateShortInviteCode() {
+  return randomChars(6, ALPHABET);
+}
+
 export function generateId() {
   return randomChars(20, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789');
 }

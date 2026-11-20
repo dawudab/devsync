@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Lock, MessageCircle, ClipboardList, Sparkles, UserRound } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Lock, MessageCircle, ClipboardList, Sparkles, UserRound, KeyRound } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { Button } from '@/components/ui/Button';
@@ -24,6 +25,8 @@ function GoogleIcon() {
 export function SignInPage() {
   const { signInWithGoogle, signInAsGuest } = useAuth();
   const toast = useToast();
+  const [params] = useSearchParams();
+  const inviteCode = (params.get('invite') || params.get('code') || '').toUpperCase();
   const [busy, setBusy] = useState(null);
   const [guestName, setGuestName] = useState('');
 
@@ -45,7 +48,18 @@ export function SignInPage() {
           <span className="text-xl font-bold tracking-tight">DevSync</span>
         </div>
         <h1 className="mt-10 text-[2rem] font-bold leading-tight tracking-tight">Know exactly what your developer shipped.</h1>
-        <p className="mt-3 text-white/70">A private workspace for business owners and their software team.</p>
+        <p className="mt-3 text-white/70">A private workspace for business owners, stakeholders, and their software team.</p>
+        {inviteCode && (
+          <div className="mt-6 flex items-center gap-3 rounded-2xl bg-white/15 p-3.5 ring-1 ring-inset ring-white/25">
+            <KeyRound className="h-5 w-5 shrink-0 text-amber-300" />
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-white/80">Workspace Invite</p>
+              <p className="text-sm text-white">
+                Sign in to accept invite <code className="font-mono font-bold">{inviteCode}</code>
+              </p>
+            </div>
+          </div>
+        )}
         <ul className="mt-8 space-y-3">
           {FEATURES.map(({ icon: Icon, text }) => (
             <li key={text} className="flex items-center gap-3 text-sm text-white/90">

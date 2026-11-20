@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 const EMPTY = { title: '', description: '', priority: 'medium' };
 
 export function NewTicketSheet({ open, onClose }) {
-  const { workspaceId, author } = useWorkspace();
+  const { workspaceId, author, isTeamMember } = useWorkspace();
   const toast = useToast();
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
@@ -23,8 +23,9 @@ export function NewTicketSheet({ open, onClose }) {
     if (!form.title.trim()) return;
     setSaving(true);
     try {
-      await backend.createTicket(workspaceId, form, author);
-      toast.success('Request sent to your developer');
+      const kind = isTeamMember ? 'suggestion' : 'change_request';
+      await backend.createTicket(workspaceId, { ...form, kind }, author);
+      toast.success(isTeamMember ? 'Suggestion shared with the team' : 'Change request sent to your developer');
       setForm(EMPTY);
       onClose();
     } catch (err) {
@@ -38,11 +39,15 @@ export function NewTicketSheet({ open, onClose }) {
     <Sheet
       open={open}
       onClose={onClose}
-      title="New request"
-      subtitle="Describe what you’d like changed — no technical details needed."
+      title={isTeamMember ? 'New suggestion / idea' : 'New change request'}
+      subtitle={
+        isTeamMember
+          ? 'Share an idea with the business owner and developer.'
+          : 'Describe what you’d like changed — no technical details needed.'
+      }
       footer={
         <Button type="submit" form="new-ticket" size="lg" className="w-full" icon={Send} loading={saving} disabled={!form.title.trim()}>
-          Send request
+          {isTeamMember ? 'Share suggestion' : 'Send request'}
         </Button>
       }
     >
