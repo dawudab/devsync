@@ -121,7 +121,7 @@ export function SettingsPage() {
   const members = Object.entries(workspace?.members || {});
   const hasOwner = Boolean(workspace?.ownerId) || Object.values(workspace?.members || {}).includes('owner');
   const canInvite = isOwner || isDeveloper;
-  const effectiveInviteRole = isOwner ? inviteRole : inviteRole === 'developer' ? 'owner' : inviteRole;
+  const effectiveInviteRole = inviteRole;
 
   return (
     <div className="space-y-4">
@@ -173,13 +173,13 @@ export function SettingsPage() {
             >
               <label className="block">
                 <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-ink-600">
-                  <Building2 className="h-3.5 w-3.5" /> Business name
+                  <Building2 className="h-3.5 w-3.5" /> {t('settings.bizNameLabel')}
                 </span>
                 <input value={biz.name} onChange={(e) => setBiz((b) => ({ ...b, name: e.target.value }))} maxLength={60} className={inputCls} />
               </label>
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-ink-600">Tagline</span>
-                <input value={biz.tagline} onChange={(e) => setBiz((b) => ({ ...b, tagline: e.target.value }))} maxLength={100} placeholder="e.g. Small-batch roastery & online storefront" className={inputCls} />
+                <span className="mb-1 block text-xs font-medium text-ink-600">{t('settings.taglineLabel')}</span>
+                <input value={biz.tagline} onChange={(e) => setBiz((b) => ({ ...b, tagline: e.target.value }))} maxLength={100} placeholder={t('settings.taglinePlaceholder')} className={inputCls} />
               </label>
               <Button type="submit" size="sm" loading={savingKey === 'biz'} disabled={biz.name.trim().length < 2}>
                 {t('settings.saveProfile')}
@@ -197,16 +197,16 @@ export function SettingsPage() {
             >
               <label className="block">
                 <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-ink-600">
-                  <LinkIcon className="h-3.5 w-3.5" /> Live Production App URL
+                  <LinkIcon className="h-3.5 w-3.5" /> {t('settings.prodUrl')}
                 </span>
                 <input type="url" value={links.productionUrl} onChange={(e) => setLinks((l) => ({ ...l, productionUrl: e.target.value }))} placeholder="https://yourapp.com" className={inputCls} />
               </label>
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-ink-600">Staging / Test Preview URL</span>
+                <span className="mb-1 block text-xs font-medium text-ink-600">{t('settings.stagingUrl')}</span>
                 <input type="url" value={links.stagingUrl} onChange={(e) => setLinks((l) => ({ ...l, stagingUrl: e.target.value }))} placeholder="https://staging.yourapp.com" className={inputCls} />
               </label>
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-ink-600">Design / Reference URL</span>
+                <span className="mb-1 block text-xs font-medium text-ink-600">{t('settings.designUrl')}</span>
                 <input type="url" value={links.designUrl} onChange={(e) => setLinks((l) => ({ ...l, designUrl: e.target.value }))} placeholder="https://figma.com/file/..." className={inputCls} />
               </label>
               <Button type="submit" size="sm" loading={savingKey === 'links'}>
@@ -229,9 +229,9 @@ export function SettingsPage() {
                 onChange={(e) => setInviteRole(e.target.value)}
                 className="h-10 flex-1 rounded-xl border-0 bg-white px-3 text-sm font-medium text-ink-800 ring-1 ring-inset ring-ink-200 focus:outline-none focus:ring-2 focus:ring-brand-500"
               >
-                {isOwner && <option value="developer">Developer (GitHub &amp; tickets)</option>}
-                <option value="team_member">Team Member (Read + suggestions)</option>
-                <option value="owner">{hasOwner ? 'Co-Owner (Full admin)' : 'Business Owner (Admin)'}</option>
+                <option value="developer">{t('settings.roleOptionDev')}</option>
+                <option value="team_member">{t('settings.roleOptionTeam')}</option>
+                <option value="owner">{hasOwner ? t('settings.roleOptionCoOwner') : t('settings.roleOptionOwner')}</option>
               </select>
               <Button
                 size="sm"
@@ -250,8 +250,8 @@ export function SettingsPage() {
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <code className="font-mono text-sm font-bold tracking-widest text-ink-900">{inv.code}</code>
-                        <Badge tone={roleMeta(inv.role).tone}>{roleMeta(inv.role).short}</Badge>
-                        {inv.usedBy && <span className="text-[11px] font-medium text-emerald-600">Claimed</span>}
+                        <Badge tone={roleMeta(inv.role).tone}>{t(`role.${inv.role}Short`)}</Badge>
+                        {inv.usedBy && <span className="text-[11px] font-medium text-emerald-600">{t('settings.claimed')}</span>}
                       </div>
                       <button
                         onClick={() => backend.deleteInvite(inv.code).catch(toast.error)}
@@ -287,9 +287,9 @@ export function SettingsPage() {
                 <Avatar name={profile.name || 'Member'} src={profile.photoURL} size="md" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-ink-900">
-                    {profile.name || 'Member'} {isSelf && <span className="text-ink-400">(you)</span>}
+                    {profile.name || 'Member'} {isSelf && <span className="text-ink-400">{t('settings.you')}</span>}
                   </p>
-                  <Badge tone={meta.tone}>{meta.label}</Badge>
+                  <Badge tone={meta.tone}>{t(`role.${memberRole}`)}</Badge>
                 </div>
                 {isOwner && !isSelf && (
                   <div className="flex items-center gap-1.5">
@@ -300,7 +300,7 @@ export function SettingsPage() {
                       className="h-8 rounded-lg border-0 bg-ink-50 px-2 text-xs font-medium text-ink-700 ring-1 ring-inset ring-ink-200"
                     >
                       {Object.values(ROLES).map((r) => (
-                        <option key={r.value} value={r.value}>{r.short}</option>
+                        <option key={r.value} value={r.value}>{t(`role.${r.value}Short`)}</option>
                       ))}
                     </select>
                     <button
@@ -317,18 +317,14 @@ export function SettingsPage() {
           })}
         </ul>
         <p className="mt-4 flex items-center gap-1.5 text-xs text-ink-400">
-          <Users className="h-3.5 w-3.5" /> Your locked role: <span className="font-semibold text-ink-600">{roleMeta(role).label}</span>
+          <Users className="h-3.5 w-3.5" /> {t('settings.yourLockedRole')} <span className="font-semibold text-ink-600">{t(`role.${role}`)}</span>
         </p>
       </Section>
 
       {(isOwner || isDeveloper) && (
         <Section
           title={t('settings.dangerZone')}
-          description={
-            isDeveloper && hasOwner
-              ? 'This project has an active Business Owner. Deleting it requires the Owner’s approval.'
-              : 'Permanently delete this project and all of its data.'
-          }
+          description={isDeveloper && hasOwner ? t('settings.dangerDevHasOwnerDesc') : t('settings.dangerOwnerDesc')}
         >
           <Button
             variant="danger"
@@ -346,18 +342,18 @@ export function SettingsPage() {
       <Section title={backend.mode === 'demo' ? t('settings.demoAccounts') : t('settings.account')}>
         {backend.mode === 'demo' ? (
           <div className="space-y-3">
-            <p className="text-xs text-ink-500">Switch which demo user you are signed in as to test locked role permissions:</p>
+            <p className="text-xs text-ink-500">{t('settings.demoAccountsDesc')}</p>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { key: 'owner', label: 'Sarah Lee', sub: 'Owner' },
-                { key: 'team_member', label: 'Jordan Kim', sub: 'Team' },
-                { key: 'developer', label: 'Alex Rivera', sub: 'Developer' },
+                { key: 'owner', label: 'Sarah Lee', sub: t('role.ownerShort') },
+                { key: 'team_member', label: 'Jordan Kim', sub: t('role.team_memberShort') },
+                { key: 'developer', label: 'Alex Rivera', sub: t('role.developerShort') },
               ].map((p) => (
                 <button
                   key={p.key}
                   onClick={() => backend.setDemoPersona(p.key)}
                   className={cn(
-                    'rounded-2xl p-2.5 text-left ring-1 ring-inset transition',
+                    'rounded-2xl p-2.5 text-start ring-1 ring-inset transition',
                     role === p.key ? 'bg-brand-50 ring-2 ring-brand-500' : 'bg-ink-50 ring-ink-200 hover:bg-white',
                   )}
                 >
@@ -377,7 +373,7 @@ export function SettingsPage() {
                 }
               }}
             >
-              Reset demo data
+              {t('settings.resetDemo')}
             </Button>
           </div>
         ) : (
@@ -386,7 +382,7 @@ export function SettingsPage() {
               {t('settings.signOut')}
             </Button>
             <p className="text-xs text-ink-400">
-              Signed in as {user?.displayName}{user?.isAnonymous ? ' (guest)' : ''}
+              {t('settings.signedInAs', { name: user?.displayName || '' })}{user?.isAnonymous ? t('settings.guestTag') : ''}
             </p>
           </div>
         )}

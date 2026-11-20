@@ -51,10 +51,10 @@ export function RequestsPage() {
         title={isDeveloper ? t('requests.board') : t('requests.title')}
         subtitle={
           isDeveloper
-            ? 'Change requests and team suggestions, sorted by priority.'
+            ? t('requests.devSub')
             : isTeamMember
-              ? 'Share suggestions and track approved work.'
-              : 'Submit official change requests without touching GitHub.'
+              ? t('requests.teamSub')
+              : t('requests.ownerSub')
         }
         action={
           <Button size="sm" icon={Plus} onClick={() => setCreating(true)} className="hidden sm:inline-flex">
@@ -68,8 +68,8 @@ export function RequestsPage() {
           <CardSkeleton />
         </div>
       ) : tickets.length === 0 ? (
-        <EmptyState icon={ClipboardList} title="No requests yet" action={<Button icon={Plus} onClick={() => setCreating(true)}>{isTeamMember ? 'Share first suggestion' : 'Create the first request'}</Button>}>
-          Need a new feature, a fix, or a text change? Send it here and track progress in one place.
+        <EmptyState icon={ClipboardList} title={t('requests.emptyTitle')} action={<Button icon={Plus} onClick={() => setCreating(true)}>{isTeamMember ? t('requests.shareFirst') : t('requests.createFirst')}</Button>}>
+          {t('requests.emptyDesc')}
         </EmptyState>
       ) : isDeveloper ? (
         <div className="space-y-6">
@@ -79,11 +79,11 @@ export function RequestsPage() {
               <section key={g.value}>
                 <h2 className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-ink-700">
                   <Icon className="h-4 w-4 text-ink-400" />
-                  {g.label}
+                  {t(`status.${g.value}`)}
                   <span className="rounded-full bg-ink-200/70 px-2 text-xs text-ink-600">{g.items.length}</span>
                 </h2>
                 <div className="space-y-2.5">
-                  {g.items.length ? g.items.map((t) => <TicketCard key={t.id} ticket={t} onOpen={open} technical />) : <p className="rounded-2xl border border-dashed border-ink-200 py-4 text-center text-xs text-ink-400">Empty</p>}
+                  {g.items.length ? g.items.map((tItem) => <TicketCard key={tItem.id} ticket={tItem} onOpen={open} technical />) : <p className="rounded-2xl border border-dashed border-ink-200 py-4 text-center text-xs text-ink-400">{t('requests.emptyCol')}</p>}
                 </div>
               </section>
             );
@@ -97,23 +97,23 @@ export function RequestsPage() {
             value={tab}
             onChange={setTab}
             options={[
-              { value: 'open', label: 'Open', count: counts.open },
-              { value: 'done', label: 'Done', count: counts.done },
-              { value: 'all', label: 'All' },
+              { value: 'open', label: t('requests.tabOpen'), count: counts.open },
+              { value: 'done', label: t('requests.tabDone'), count: counts.done },
+              { value: 'all', label: t('requests.tabAll') },
             ]}
           />
           <div className="space-y-2.5">
-            {ownerList.length ? ownerList.map((t) => <TicketCard key={t.id} ticket={t} onOpen={open} />) : <p className="py-8 text-center text-sm text-ink-400">Nothing here.</p>}
+            {ownerList.length ? ownerList.map((tItem) => <TicketCard key={tItem.id} ticket={tItem} onOpen={open} />) : <p className="py-8 text-center text-sm text-ink-400">{t('requests.nothingHere')}</p>}
           </div>
         </>
       )}
 
       <button
         onClick={() => setCreating(true)}
-        className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] right-4 z-20 flex h-14 items-center gap-2 rounded-full bg-brand-600 pl-4 pr-5 font-semibold text-white shadow-lg shadow-brand-600/30 transition hover:bg-brand-700 active:scale-95 sm:hidden"
-        aria-label="New request"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] end-4 z-20 flex h-14 items-center gap-2 rounded-full bg-brand-600 pe-5 ps-4 font-semibold text-white shadow-lg shadow-brand-600/30 transition hover:bg-brand-700 active:scale-95 sm:hidden"
+        aria-label={t('requests.newRequest')}
       >
-        <Plus className="h-5 w-5" /> New
+        <Plus className="h-5 w-5" /> {t('requests.new')}
       </button>
 
       <NewTicketSheet open={creating} onClose={() => setCreating(false)} />

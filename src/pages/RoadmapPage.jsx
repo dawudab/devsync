@@ -117,29 +117,27 @@ export function RoadmapPage() {
       ) : milestones.length === 0 ? (
         <EmptyState
           icon={MapIcon}
-          title="No milestones yet"
-          action={isOwner && <Button icon={Plus} onClick={() => setCreating(true)}>Create first milestone</Button>}
+          title={t('roadmap.emptyTitle')}
+          action={isOwner && <Button icon={Plus} onClick={() => setCreating(true)}>{t('roadmap.createFirst')}</Button>}
         >
-          {isOwner
-            ? 'Break your project into clear phases so everyone can track progress at a glance.'
-            : 'The business owner has not added roadmap milestones yet.'}
+          {isOwner ? t('roadmap.emptyOwner') : t('roadmap.emptyMember')}
         </EmptyState>
       ) : (
         <div className="space-y-4">
           {milestones.map((m, idx) => {
             const st = STATUS_TONE[m.status] || MILESTONE_STATUSES[0];
             const linkedUpdates = updates.filter((u) => m.linkedUpdateIds?.includes(u.id));
-            const linkedTickets = tickets.filter((t) => m.linkedTicketIds?.includes(t.id) || t.milestoneId === m.id);
+            const linkedTickets = tickets.filter((tItem) => m.linkedTicketIds?.includes(tItem.id) || tItem.milestoneId === m.id);
 
             return (
               <article key={m.id} className="rounded-3xl bg-white p-5 shadow-card ring-1 ring-ink-100">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone={st.tone} dot>{st.label}</Badge>
+                      <Badge tone={st.tone} dot>{t(`milestone.${st.value}`)}</Badge>
                       {m.targetDate && (
                         <span className="inline-flex items-center gap-1 text-xs text-ink-400">
-                          <Calendar className="h-3.5 w-3.5" /> Target {m.targetDate}
+                          <Calendar className="h-3.5 w-3.5" /> {t('roadmap.target', { date: m.targetDate })}
                         </span>
                       )}
                     </div>
@@ -178,7 +176,7 @@ export function RoadmapPage() {
 
                 <div className="mt-4">
                   <div className="flex items-center justify-between text-xs font-medium">
-                    <span className="text-ink-500">Completion</span>
+                    <span className="text-ink-500">{t('roadmap.completion')}</span>
                     <span className="tabular-nums text-ink-800">{m.progress || 0}%</span>
                   </div>
                   <div className="mt-1.5 h-2.5 w-full overflow-hidden rounded-full bg-ink-100">
@@ -201,7 +199,7 @@ export function RoadmapPage() {
                         aria-label="Milestone progress"
                       />
                       <Button size="sm" variant="secondary" icon={Link2} onClick={() => setLinkingId(m.id)}>
-                        Link work
+                        {t('roadmap.linkWork')}
                       </Button>
                     </div>
                   )}
@@ -214,9 +212,9 @@ export function RoadmapPage() {
                         <CheckCircle2 className="h-3 w-3" /> {u.summary?.headline || 'Update'}
                       </span>
                     ))}
-                    {linkedTickets.map((t) => (
-                      <span key={t.id} className="inline-flex items-center gap-1 rounded-full bg-ink-100 px-2.5 py-1 text-[11px] font-medium text-ink-700">
-                        #{t.number} {t.title}
+                    {linkedTickets.map((tItem) => (
+                      <span key={tItem.id} className="inline-flex items-center gap-1 rounded-full bg-ink-100 px-2.5 py-1 text-[11px] font-medium text-ink-700">
+                        #{tItem.number} {tItem.title}
                       </span>
                     ))}
                   </div>
@@ -230,40 +228,40 @@ export function RoadmapPage() {
       <Sheet
         open={creating}
         onClose={() => setCreating(false)}
-        title="New milestone"
-        subtitle="Define a project phase and target date."
+        title={t('roadmap.modalTitle')}
+        subtitle={t('roadmap.modalSub')}
         footer={
           <Button type="submit" form="new-milestone" size="lg" className="w-full" loading={saving} disabled={!form.title.trim()}>
-            Add milestone
+            {t('roadmap.addMilestone')}
           </Button>
         }
       >
         <form id="new-milestone" onSubmit={create} className="space-y-4">
           <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-ink-700">Phase title</span>
+            <span className="mb-1.5 block text-sm font-medium text-ink-700">{t('roadmap.phaseTitle')}</span>
             <input
               autoFocus
               required
               maxLength={120}
               value={form.title}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-              placeholder="e.g. Phase 1: MVP Launch"
+              placeholder={t('roadmap.phasePlaceholder')}
               className="h-12 w-full rounded-xl border-0 bg-ink-50 px-4 text-[15px] text-ink-900 ring-1 ring-inset ring-ink-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </label>
           <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-ink-700">Goal / scope</span>
+            <span className="mb-1.5 block text-sm font-medium text-ink-700">{t('roadmap.scope')}</span>
             <textarea
               rows={3}
               maxLength={1000}
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              placeholder="What does done look like for this phase?"
+              placeholder={t('roadmap.scopePlaceholder')}
               className="w-full resize-none rounded-xl border-0 bg-ink-50 px-4 py-3 text-[15px] text-ink-900 ring-1 ring-inset ring-ink-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </label>
           <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-ink-700">Target date (optional)</span>
+            <span className="mb-1.5 block text-sm font-medium text-ink-700">{t('roadmap.targetDate')}</span>
             <input
               type="date"
               value={form.targetDate}
@@ -274,11 +272,11 @@ export function RoadmapPage() {
         </form>
       </Sheet>
 
-      <Sheet open={Boolean(linkingMilestone)} onClose={() => setLinkingId(null)} title="Link work to milestone" subtitle={linkingMilestone?.title}>
+      <Sheet open={Boolean(linkingMilestone)} onClose={() => setLinkingId(null)} title={t('roadmap.linkModalTitle')} subtitle={linkingMilestone?.title}>
         {linkingMilestone && (
           <div className="space-y-5">
             <div>
-              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">Shipped updates</h4>
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">{t('roadmap.shippedUpdates')}</h4>
               <ul className="space-y-1.5">
                 {updates.slice(0, 10).map((u) => {
                   const linked = linkingMilestone.linkedUpdateIds?.includes(u.id);
@@ -287,7 +285,7 @@ export function RoadmapPage() {
                       <button
                         onClick={() => toggleLinkUpdate(linkingMilestone, u.id)}
                         className={cn(
-                          'flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm ring-1 ring-inset transition',
+                          'flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-start text-sm ring-1 ring-inset transition',
                           linked ? 'bg-emerald-50 text-emerald-900 ring-emerald-200' : 'bg-white text-ink-700 ring-ink-200 hover:bg-ink-50',
                         )}
                       >
@@ -297,31 +295,31 @@ export function RoadmapPage() {
                     </li>
                   );
                 })}
-                {!updates.length && <li className="text-xs text-ink-400">No updates yet.</li>}
+                {!updates.length && <li className="text-xs text-ink-400">{t('roadmap.noUpdates')}</li>}
               </ul>
             </div>
 
             <div>
-              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">Requests</h4>
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">{t('roadmap.requests')}</h4>
               <ul className="space-y-1.5">
-                {tickets.slice(0, 10).map((t) => {
-                  const linked = linkingMilestone.linkedTicketIds?.includes(t.id);
+                {tickets.slice(0, 10).map((tItem) => {
+                  const linked = linkingMilestone.linkedTicketIds?.includes(tItem.id);
                   return (
-                    <li key={t.id}>
+                    <li key={tItem.id}>
                       <button
-                        onClick={() => toggleLinkTicket(linkingMilestone, t.id)}
+                        onClick={() => toggleLinkTicket(linkingMilestone, tItem.id)}
                         className={cn(
-                          'flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm ring-1 ring-inset transition',
+                          'flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-start text-sm ring-1 ring-inset transition',
                           linked ? 'bg-brand-50 text-brand-900 ring-brand-200' : 'bg-white text-ink-700 ring-ink-200 hover:bg-ink-50',
                         )}
                       >
-                        <span className="truncate">#{t.number} {t.title}</span>
+                        <span className="truncate">#{tItem.number} {tItem.title}</span>
                         {linked && <CheckCircle2 className="h-4 w-4 shrink-0 text-brand-600" />}
                       </button>
                     </li>
                   );
                 })}
-                {!tickets.length && <li className="text-xs text-ink-400">No requests yet.</li>}
+                {!tickets.length && <li className="text-xs text-ink-400">{t('roadmap.noRequests')}</li>}
               </ul>
             </div>
           </div>

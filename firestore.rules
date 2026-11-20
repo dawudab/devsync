@@ -59,10 +59,7 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.usedBy == null
         && request.resource.data.createdAt == request.time
-        && (
-          roleIn(request.resource.data.workspaceId) == 'owner'
-          || (roleIn(request.resource.data.workspaceId) == 'developer' && request.resource.data.role in ['owner', 'team_member'])
-        );
+        && roleIn(request.resource.data.workspaceId) in ['owner', 'developer'];
       allow delete: if isMember(resource.data.workspaceId)
         && (roleIn(resource.data.workspaceId) == 'owner' || resource.data.createdBy == request.auth.uid);
       allow update: if false;

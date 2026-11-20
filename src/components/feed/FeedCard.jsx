@@ -16,7 +16,7 @@ import { CommentThread } from './CommentThread';
 
 export const FeedCard = memo(function FeedCard({ update, highlighted = false, style }) {
   const { workspaceId, isDeveloper, isOwner, author } = useWorkspace();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const toast = useToast();
   const [showComments, setShowComments] = useState(false);
   const [tweaking, setTweaking] = useState(false);
@@ -42,6 +42,10 @@ export const FeedCard = memo(function FeedCard({ update, highlighted = false, st
     }
   };
 
+  const impactKey = IMPACT_META[update.summary?.impact] ? update.summary.impact : 'maintenance';
+  const deliveryKey = status.label === 'In review' ? 'inReview' : status.label === 'Shipped' ? 'shipped' : 'inProgress';
+  const approvalKey = approval.value;
+
   return (
     <article
       id={`update-${update.id}`}
@@ -51,14 +55,14 @@ export const FeedCard = memo(function FeedCard({ update, highlighted = false, st
       <header className="mb-3 flex flex-wrap items-center gap-2">
         <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset', impact.chip)}>
           <ImpactIcon className="h-3.5 w-3.5" />
-          {impact.label}
+          {t(`impact.${impactKey}`)}
         </span>
         <Badge tone={status.tone} dot>
-          {status.label}
+          {t(`delivery.${deliveryKey}`)}
         </Badge>
-        <Badge tone={approval.tone}>{approval.label}</Badge>
-        <time className="ml-auto text-xs text-ink-400" title={formatDateTime(update.createdAt)}>
-          {timeAgo(update.createdAt)}
+        <Badge tone={approval.tone}>{t(`approval.${approvalKey}`)}</Badge>
+        <time className="ms-auto text-xs text-ink-400" title={formatDateTime(update.createdAt, lang)}>
+          {timeAgo(update.createdAt, lang)}
         </time>
       </header>
 
@@ -66,7 +70,7 @@ export const FeedCard = memo(function FeedCard({ update, highlighted = false, st
 
       {update.approvalStatus === 'changes_requested' && update.approvalNote && (
         <div className="mt-3 rounded-2xl bg-rose-50 px-3.5 py-2.5 text-xs text-rose-800 ring-1 ring-inset ring-rose-200">
-          <span className="font-semibold">Owner requested tweaks:</span> {update.approvalNote}
+          <span className="font-semibold">{t('feed.ownerTweaks')}</span> {update.approvalNote}
         </div>
       )}
 
@@ -76,10 +80,12 @@ export const FeedCard = memo(function FeedCard({ update, highlighted = false, st
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-medium text-ink-600">
                 {update.approvalStatus === 'approved'
-                  ? `Signed off${update.approvedBy?.name ? ` by ${update.approvedBy.name}` : ''}`
+                  ? update.approvedBy?.name
+                    ? t('feed.signedOffBy', { name: update.approvedBy.name })
+                    : t('feed.signedOff')
                   : update.approvalStatus === 'changes_requested'
-                    ? 'Waiting for developer tweaks'
-                    : 'Ready for your sign-off'}
+                    ? t('feed.waitingTweaks')
+                    : t('feed.readySignOff')}
               </span>
               <div className="flex items-center gap-2">
                 {update.approvalStatus !== 'approved' && (
@@ -107,15 +113,15 @@ export const FeedCard = memo(function FeedCard({ update, highlighted = false, st
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 maxLength={300}
-                placeholder="What should be tweaked? (optional)"
+                placeholder={t('feed.tweaksPlaceholder')}
                 className="h-10 w-full rounded-xl border-0 bg-white px-3 text-sm text-ink-900 ring-1 ring-inset ring-ink-200 focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
               <div className="flex justify-end gap-2">
                 <Button size="sm" variant="ghost" onClick={() => setTweaking(false)}>
-                  Cancel
+                  {t('feed.cancel')}
                 </Button>
                 <Button size="sm" variant="danger" type="submit" loading={busy}>
-                  Send tweak request
+                  {t('feed.sendTweaks')}
                 </Button>
               </div>
             </form>
@@ -126,9 +132,9 @@ export const FeedCard = memo(function FeedCard({ update, highlighted = false, st
       <div className="mt-4 flex items-center gap-2 text-xs text-ink-400">
         <Avatar name={update.actor?.login} src={update.actor?.avatarUrl} size="xs" />
         <span className="truncate">
-          {isDeveloper ? `@${update.actor?.login} · ${update.repo}` : `By ${update.actor?.login}`}
+          {isDeveloper ? `@${update.actor?.login} · ${update.repo}` : t('feed.byActor', { name: update.actor?.login })}
         </span>
-        {!isDeveloper && <span className="ml-auto shrink-0"><AISourceTag source={update.summary?.source} /></span>}
+        {!isDeveloper && <span className="ms-auto shrink-0"><AISourceTag source={update.summary?.source} /></span>}
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-2 border-t border-ink-100 pt-3">

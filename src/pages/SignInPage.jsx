@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Lock, MessageCircle, ClipboardList, Sparkles, UserRound, KeyRound } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/context/ToastContext';
 import { Button } from '@/components/ui/Button';
 
 const FEATURES = [
-  { icon: Sparkles, text: 'Code changes explained in plain English' },
-  { icon: MessageCircle, text: 'Chat with your developer under every update' },
-  { icon: ClipboardList, text: 'Request changes without touching GitHub' },
+  { icon: Sparkles, key: 'signin.f1' },
+  { icon: MessageCircle, key: 'signin.f2' },
+  { icon: ClipboardList, key: 'signin.f3' },
 ];
 
 function GoogleIcon() {
@@ -24,6 +25,7 @@ function GoogleIcon() {
 
 export function SignInPage() {
   const { signInWithGoogle, signInAsGuest } = useAuth();
+  const { t } = useLanguage();
   const toast = useToast();
   const [params] = useSearchParams();
   const inviteCode = (params.get('invite') || params.get('code') || '').toUpperCase();
@@ -47,47 +49,47 @@ export function SignInPage() {
           <img src="/favicon.svg" alt="" className="h-10 w-10 rounded-xl ring-2 ring-white/20" />
           <span className="text-xl font-bold tracking-tight">DevSync</span>
         </div>
-        <h1 className="mt-10 text-[2rem] font-bold leading-tight tracking-tight">Know exactly what your developer shipped.</h1>
-        <p className="mt-3 text-white/70">A private workspace for business owners, stakeholders, and their software team.</p>
+        <h1 className="mt-10 text-[2rem] font-bold leading-tight tracking-tight">{t('signin.headline')}</h1>
+        <p className="mt-3 text-white/70">{t('signin.sub')}</p>
         {inviteCode && (
           <div className="mt-6 flex items-center gap-3 rounded-2xl bg-white/15 p-3.5 ring-1 ring-inset ring-white/25">
             <KeyRound className="h-5 w-5 shrink-0 text-amber-300" />
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-white/80">Workspace Invite</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-white/80">{t('signin.inviteTitle')}</p>
               <p className="text-sm text-white">
-                Sign in to accept invite <code className="font-mono font-bold">{inviteCode}</code>
+                {t('signin.inviteSub')} <code className="font-mono font-bold">{inviteCode}</code>
               </p>
             </div>
           </div>
         )}
         <ul className="mt-8 space-y-3">
-          {FEATURES.map(({ icon: Icon, text }) => (
-            <li key={text} className="flex items-center gap-3 text-sm text-white/90">
+          {FEATURES.map(({ icon: Icon, key }) => (
+            <li key={key} className="flex items-center gap-3 text-sm text-white/90">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10">
                 <Icon className="h-4 w-4" />
               </span>
-              {text}
+              {t(key)}
             </li>
           ))}
         </ul>
 
         <div className="mt-auto space-y-3 pt-10">
           <Button size="lg" variant="secondary" className="w-full !text-ink-900" loading={busy === 'google'} onClick={run('google', signInWithGoogle)}>
-            {busy !== 'google' && <GoogleIcon />} Continue with Google
+            {busy !== 'google' && <GoogleIcon />} {t('signin.google')}
           </Button>
           <div className="flex gap-2">
             <input
               value={guestName}
               onChange={(e) => setGuestName(e.target.value)}
-              placeholder="Your name"
+              placeholder={t('signin.namePlaceholder')}
               className="h-12 min-w-0 flex-1 rounded-2xl bg-white/10 px-4 text-sm text-white ring-1 ring-inset ring-white/20 placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-white/60"
             />
             <Button size="lg" variant="ghost" icon={UserRound} className="!text-white ring-1 ring-inset ring-white/20 hover:!bg-white/10" loading={busy === 'guest'} onClick={run('guest', () => signInAsGuest(guestName.trim() || 'Guest'))}>
-              Guest
+              {t('signin.guest')}
             </Button>
           </div>
           <p className="flex items-center justify-center gap-1.5 pt-2 text-xs text-white/50">
-            <Lock className="h-3 w-3" /> Each workspace is private and isolated.
+            <Lock className="h-3 w-3" /> {t('signin.privacy')}
           </p>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { GitCommitHorizontal, Link2, Unlink, ExternalLink, ArrowRight, Search } 
 import { backend } from '@/lib/data';
 import { TICKET_STATUSES, STATUS_ICONS, statusMeta } from '@/lib/constants';
 import { useWorkspace } from '@/context/WorkspaceContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/context/ToastContext';
 import { useFeed } from '@/hooks/useWorkspaceData';
 import { Sheet } from '@/components/ui/Sheet';
@@ -58,6 +59,7 @@ function CommitPicker({ onPick, onCancel }) {
 
 export function TicketDetailSheet({ ticket, onClose }) {
   const { workspaceId, author, isDeveloper } = useWorkspace();
+  const { t, lang } = useLanguage();
   const toast = useToast();
   const navigate = useNavigate();
   const [picking, setPicking] = useState(false);
@@ -89,7 +91,7 @@ export function TicketDetailSheet({ ticket, onClose }) {
   };
 
   return (
-    <Sheet open onClose={onClose} title={ticket.title} subtitle={`#${ticket.number} · requested by ${ticket.createdBy?.name} ${timeAgo(ticket.createdAt)}`}>
+    <Sheet open onClose={onClose} title={ticket.title} subtitle={`#${ticket.number} · ${ticket.createdBy?.name} · ${timeAgo(ticket.createdAt, lang)}`}>
       <div className="space-y-6">
         <div className="flex flex-wrap gap-2">
           <StatusBadge status={ticket.status} />
@@ -99,24 +101,24 @@ export function TicketDetailSheet({ ticket, onClose }) {
         {ticket.description ? (
           <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-ink-700">{ticket.description}</p>
         ) : (
-          <p className="text-sm italic text-ink-400">No additional details.</p>
+          <p className="text-sm italic text-ink-400">{t('requests.noDetails')}</p>
         )}
 
         {isDeveloper && (
           <section className="space-y-2">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-400">Status</h4>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-400">{t('requests.status')}</h4>
             <SegmentedControl
               ariaLabel="Ticket status"
               className="w-full"
               value={ticket.status}
               onChange={setStatus}
-              options={TICKET_STATUSES.map((s) => ({ value: s.value, label: s.label, icon: STATUS_ICONS[s.value] }))}
+              options={TICKET_STATUSES.map((s) => ({ value: s.value, label: t(`status.${s.value}`), icon: STATUS_ICONS[s.value] }))}
             />
           </section>
         )}
 
         <section className="space-y-2">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-400">{isDeveloper ? 'Linked commit' : 'Delivered in'}</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-400">{isDeveloper ? t('requests.linkedCommit') : t('requests.deliveredIn')}</h4>
           {ticket.linkedCommit ? (
             <div className="rounded-2xl bg-emerald-50/70 p-3 ring-1 ring-inset ring-emerald-100">
               <div className="flex items-start gap-2">
@@ -128,7 +130,7 @@ export function TicketDetailSheet({ ticket, onClose }) {
                       <p className="break-words font-mono text-xs text-ink-700">{ticket.linkedCommit.message}</p>
                     </>
                   ) : (
-                    <p className="text-sm text-emerald-900">Your developer marked this as done and connected it to a product update.</p>
+                    <p className="text-sm text-emerald-900">{t('requests.deliveredDesc')}</p>
                   )}
                 </div>
               </div>
@@ -143,7 +145,7 @@ export function TicketDetailSheet({ ticket, onClose }) {
                       navigate(`/#update-${ticket.linkedCommit.updateId}`);
                     }}
                   >
-                    See the update
+                    {t('requests.seeUpdate')}
                   </Button>
                 )}
                 {isDeveloper && ticket.linkedCommit.url && (
@@ -155,7 +157,7 @@ export function TicketDetailSheet({ ticket, onClose }) {
                 )}
                 {isDeveloper && (
                   <Button size="sm" variant="ghost" icon={Unlink} disabled={busy} onClick={() => mutate({ linkedCommit: null }, { type: 'unlinked' })}>
-                    Unlink
+                    {t('requests.unlink')}
                   </Button>
                 )}
               </div>
@@ -165,24 +167,24 @@ export function TicketDetailSheet({ ticket, onClose }) {
               <CommitPicker onPick={link} onCancel={() => setPicking(false)} />
             ) : (
               <Button variant="secondary" icon={Link2} onClick={() => setPicking(true)} className="w-full" disabled={busy}>
-                Link a commit
+                {t('requests.linkCommit')}
               </Button>
             )
           ) : (
-            <p className="text-sm text-ink-500">Not delivered yet — you’ll see it here once it’s done.</p>
+            <p className="text-sm text-ink-500">{t('requests.notDelivered')}</p>
           )}
         </section>
 
         <section>
-          <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-400">Activity</h4>
-          <ol className="relative space-y-4 border-l border-ink-200 pl-5">
+          <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-400">{t('requests.activity')}</h4>
+          <ol className="relative space-y-4 border-s border-ink-200 ps-5">
             {[...(ticket.activity || [])].reverse().map((a, i) => (
               <li key={i} className="relative">
-                <span className={cn('absolute -left-[25px] top-1 h-2.5 w-2.5 rounded-full ring-4 ring-white', i === 0 ? 'bg-brand-500' : 'bg-ink-300')} />
+                <span className={cn('absolute -start-[25px] top-1 h-2.5 w-2.5 rounded-full ring-4 ring-white', i === 0 ? 'bg-brand-500' : 'bg-ink-300')} />
                 <p className="text-sm text-ink-700">
                   <span className="font-semibold text-ink-900">{a.by}</span> {activityText(a)}
                 </p>
-                <p className="text-xs text-ink-400">{formatDateTime(a.at)}</p>
+                <p className="text-xs text-ink-400">{formatDateTime(a.at, lang)}</p>
               </li>
             ))}
           </ol>

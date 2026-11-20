@@ -1,15 +1,17 @@
 import { ExternalLink, Globe, FlaskConical, Palette } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useWorkspace } from '@/context/WorkspaceContext';
+import { useLanguage } from '@/context/LanguageContext';
 
 const LINK_DEFS = [
-  { key: 'productionUrl', label: 'Live App', sub: 'Production', icon: Globe, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
-  { key: 'stagingUrl', label: 'Staging', sub: 'Test preview', icon: FlaskConical, tone: 'bg-sky-50 text-sky-700 ring-sky-200' },
-  { key: 'designUrl', label: 'Prototype', sub: 'Figma', icon: Palette, tone: 'bg-violet-50 text-violet-700 ring-violet-200' },
+  { key: 'productionUrl', labelKey: 'links.liveApp', subKey: 'links.production', icon: Globe, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+  { key: 'stagingUrl', labelKey: 'links.staging', subKey: 'links.testPreview', icon: FlaskConical, tone: 'bg-sky-50 text-sky-700 ring-sky-200' },
+  { key: 'designUrl', labelKey: 'links.prototype', subKey: 'links.design', icon: Palette, tone: 'bg-violet-50 text-violet-700 ring-violet-200' },
 ];
 
 export function LiveLinksBar() {
   const { workspace, isOwner } = useWorkspace();
+  const { t } = useLanguage();
   const links = workspace?.workspaceLinks || {};
   const configured = LINK_DEFS.filter((d) => links[d.key]?.trim());
 
@@ -18,17 +20,17 @@ export function LiveLinksBar() {
     return (
       <Link
         to="/settings"
-        className="flex items-center justify-between rounded-2xl border border-dashed border-ink-300 bg-white/70 px-4 py-3 text-sm text-ink-600 transition hover:border-brand-300 hover:bg-white"
+        className="flex items-center justify-between gap-2 rounded-2xl border border-dashed border-ink-300 bg-white/70 px-4 py-3 text-sm text-ink-600 transition hover:border-brand-300 hover:bg-white"
       >
-        <span>Pin your Live App, Staging, and Figma links for one-tap previews</span>
-        <span className="font-semibold text-brand-600">Add links →</span>
+        <span>{t('links.emptyPrompt')}</span>
+        <span className="shrink-0 font-semibold text-brand-600">{t('links.addLinks')}</span>
       </Link>
     );
   }
 
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-      {configured.map(({ key, label, sub, icon: Icon, tone }) => (
+      {configured.map(({ key, labelKey, subKey, icon: Icon, tone }) => (
         <a
           key={key}
           href={links[key]}
@@ -40,8 +42,8 @@ export function LiveLinksBar() {
             <Icon className="h-4 w-4" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-semibold text-ink-900">{label}</span>
-            <span className="block truncate text-[11px] text-ink-400">{sub}</span>
+            <span className="block truncate text-sm font-semibold text-ink-900">{t(labelKey)}</span>
+            <span className="block truncate text-[11px] text-ink-400">{t(subKey)}</span>
           </span>
           <ExternalLink className="h-4 w-4 shrink-0 text-ink-300 transition group-hover:text-brand-600" />
         </a>

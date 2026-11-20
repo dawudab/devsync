@@ -133,7 +133,7 @@ describe('workspace documents & invites', () => {
     const base = { code: 'AB12CD', workspaceId: 'A', workspaceName: 'Workspace', role: 'team_member', createdBy: OWNER_A, usedBy: null, createdAt: serverTimestamp() };
     await assertSucceeds(setDoc(doc(as(OWNER_A), 'invites/AB12CD'), base));
     await assertFails(setDoc(doc(as(TEAM_A), 'invites/TM1234'), { ...base, code: 'TM1234', createdBy: TEAM_A }));
-    await assertFails(setDoc(doc(as(DEV_A), 'invites/DV1234'), { ...base, code: 'DV1234', role: 'developer', createdBy: DEV_A }));
+    await assertSucceeds(setDoc(doc(as(DEV_A), 'invites/DV1234'), { ...base, code: 'DV1234', role: 'developer', createdBy: DEV_A }));
     await assertSucceeds(setDoc(doc(as(DEV_A), 'invites/TM5678'), { ...base, code: 'TM5678', role: 'team_member', createdBy: DEV_A }));
     await assertSucceeds(setDoc(doc(as(DEV_A), 'invites/OW1234'), { ...base, code: 'OW1234', role: 'owner', createdBy: DEV_A }));
   });

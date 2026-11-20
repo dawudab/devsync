@@ -1,7 +1,9 @@
 import { Check, AlertTriangle, Sparkles } from 'lucide-react';
+import { useLanguage } from '@/context/LanguageContext';
 import { cn } from '@/lib/utils';
 
 export function AISummary({ summary, compact = false }) {
+  const { t } = useLanguage();
   if (!summary) return null;
   return (
     <div>
@@ -19,7 +21,7 @@ export function AISummary({ summary, compact = false }) {
       {(summary.risk === 'high' || summary.breaking) && (
         <p className="mt-3 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          This is a bigger change — a quick click-through on your side is a good idea.
+          {t('feed.highRiskWarning')}
         </p>
       )}
     </div>
@@ -27,10 +29,11 @@ export function AISummary({ summary, compact = false }) {
 }
 
 export function AISourceTag({ source }) {
+  const { t } = useLanguage();
   return (
     <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-400">
       <Sparkles className="h-3 w-3" />
-      {source === 'gemini' ? 'Explained by Gemini' : 'Auto-explained'}
+      {source === 'gemini' ? t('feed.explainedGemini') : t('feed.autoExplained')}
     </span>
   );
 }

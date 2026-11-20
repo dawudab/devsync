@@ -19,11 +19,11 @@ import { PageHeader } from '@/components/layout/AppShell';
 import { cn, deliveryStatus, greeting } from '@/lib/utils';
 
 const FILTERS = [
-  { value: 'all', label: 'All' },
-  { value: 'feature', label: 'New features' },
-  { value: 'fix', label: 'Fixes' },
-  { value: 'improvement', label: 'Improvements' },
-  { value: 'maintenance', label: 'Behind the scenes' },
+  { value: 'all', key: 'feed.filter.all' },
+  { value: 'feature', key: 'feed.filter.feature' },
+  { value: 'fix', key: 'feed.filter.fix' },
+  { value: 'improvement', key: 'feed.filter.improvement' },
+  { value: 'maintenance', key: 'feed.filter.maintenance' },
 ];
 
 const WEEK = 7 * 24 * 3600 * 1000;
@@ -70,7 +70,7 @@ function OwnerOverview({ updates, tickets }) {
 export function FeedPage() {
   const { user } = useAuth();
   const { workspace, isDeveloper } = useWorkspace();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { updates, loading } = useFeed();
   const { tickets } = useTickets();
   const { milestones } = useMilestones();
@@ -92,11 +92,11 @@ export function FeedPage() {
       {isDeveloper ? (
         <PageHeader
           title={t('feed.devTitle')}
-          subtitle={repo ? <span className="font-mono text-xs">{repo.fullName}</span> : 'No repository connected'}
+          subtitle={repo ? <span className="font-mono text-xs">{repo.fullName}</span> : t('feed.noRepo')}
           action={repo && <SimulateEventButton />}
         />
       ) : (
-        <PageHeader title={greeting(user?.displayName)} subtitle={workspace?.businessProfile?.tagline || t('feed.ownerSub')} />
+        <PageHeader title={greeting(user?.displayName, lang)} subtitle={workspace?.businessProfile?.tagline || t('feed.ownerSub')} />
       )}
 
       <DeletionRequestBanner />
@@ -111,20 +111,20 @@ export function FeedPage() {
       {!repo && isDeveloper && (
         <EmptyState
           icon={Github}
-          title="Connect your GitHub repository"
+          title={t('feed.connectGithubTitle')}
           action={
             <Link to="/settings">
-              <Button icon={Github}>Connect GitHub</Button>
+              <Button icon={Github}>{t('feed.connectGithubBtn')}</Button>
             </Link>
           }
         >
-          Install the DevSync GitHub App so code pushes and PRs appear in the workspace feed automatically.
+          {t('feed.connectGithubDesc')}
         </EmptyState>
       )}
 
       {!repo && !isDeveloper && (
-        <EmptyState icon={Inbox} title="Waiting for developer connection">
-          Once your developer connects the project repository, plain-English updates will appear here automatically.
+        <EmptyState icon={Inbox} title={t('feed.waitingDevTitle')}>
+          {t('feed.waitingDevDesc')}
         </EmptyState>
       )}
 
@@ -141,7 +141,7 @@ export function FeedPage() {
                 filter === f.value ? 'bg-ink-900 text-white ring-ink-900' : 'bg-white text-ink-600 ring-ink-200 hover:bg-ink-50',
               )}
             >
-              {f.label}
+              {t(f.key)}
             </button>
           ))}
         </div>
@@ -154,8 +154,8 @@ export function FeedPage() {
             <CardSkeleton />
           </>
         ) : repo && visible.length === 0 ? (
-          <EmptyState icon={Inbox} title={updates.length ? 'Nothing in this category yet' : 'Waiting for the first update'} action={!updates.length && isDeveloper && <SimulateEventButton />}>
-            {updates.length ? 'Try another filter.' : 'As soon as code is pushed, a plain-English summary will appear here.'}
+          <EmptyState icon={Inbox} title={updates.length ? t('feed.nothingCategory') : t('feed.waitingFirst')} action={!updates.length && isDeveloper && <SimulateEventButton />}>
+            {updates.length ? t('feed.tryFilter') : t('feed.waitingFirstDesc')}
           </EmptyState>
         ) : (
           visible.map((u, i) => <FeedCard key={u.id} update={u} highlighted={u.id === highlightId} style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }} />)

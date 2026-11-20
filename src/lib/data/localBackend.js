@@ -183,10 +183,7 @@ export function createLocalBackend() {
     },
 
     async createInvite(wsId, workspaceName, role, creatorUid) {
-      const { role: callerRole } = assertMember(wsId, ['owner', 'developer']);
-      if (callerRole === 'developer' && !['owner', 'team_member'].includes(role)) {
-        throw new Error('Developers can only generate Owner or Team Member invites');
-      }
+      assertMember(wsId, ['owner', 'developer']);
       const code = generateShortInviteCode();
       store.set(`invites/${code}`, {
         code,

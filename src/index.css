@@ -7,6 +7,14 @@
     -webkit-tap-highlight-color: transparent;
     text-size-adjust: 100%;
   }
+  html[dir='rtl'] body {
+    font-family: 'Cairo', 'Inter', system-ui, -apple-system, sans-serif;
+  }
+  html[dir='rtl'] code,
+  html[dir='rtl'] .font-mono {
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
   body {
     @apply min-h-dvh font-sans;
     overscroll-behavior-y: none;

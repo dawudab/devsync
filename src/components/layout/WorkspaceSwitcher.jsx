@@ -15,7 +15,7 @@ export function WorkspaceSwitcher() {
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="group flex min-w-0 items-center gap-2 rounded-xl py-1 pr-1 text-left">
+      <button onClick={() => setOpen(true)} className="group flex min-w-0 items-center gap-2 rounded-xl py-1 pe-1 text-start">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-sm font-bold text-white shadow-sm">
           {(workspace?.name || 'D').charAt(0)}
         </span>
@@ -30,7 +30,7 @@ export function WorkspaceSwitcher() {
         </span>
       </button>
 
-      <Sheet open={open} onClose={() => setOpen(false)} title="Your workspaces" subtitle="Each workspace is fully isolated — data never crosses between them.">
+      <Sheet open={open} onClose={() => setOpen(false)} title={t('workspace.yourWorkspaces')} subtitle={t('workspace.isolated')}>
         <ul className="space-y-2">
           {(workspaces || []).map((w) => (
             <li key={w.id}>
@@ -41,14 +41,14 @@ export function WorkspaceSwitcher() {
                   navigate('/');
                 }}
                 className={cn(
-                  'flex w-full items-center gap-3 rounded-2xl p-3 text-left ring-1 ring-inset transition',
+                  'flex w-full items-center gap-3 rounded-2xl p-3 text-start ring-1 ring-inset transition',
                   w.id === workspaceId ? 'bg-brand-50 ring-brand-200' : 'ring-ink-200 hover:bg-ink-50',
                 )}
               >
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-sm font-bold text-brand-700 ring-1 ring-ink-200">{w.name.charAt(0)}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium text-ink-900">{w.name}</span>
-                  <span className="text-xs text-ink-500">{roleMeta(w.role).label}</span>
+                  <span className="text-xs text-ink-500">{t(`role.${w.role}`) || roleMeta(w.role).label}</span>
                 </span>
                 {w.id === workspaceId && <Check className="h-5 w-5 text-brand-600" />}
               </button>
@@ -60,12 +60,12 @@ export function WorkspaceSwitcher() {
                 setOpen(false);
                 navigate('/onboarding');
               }}
-              className="flex w-full items-center gap-3 rounded-2xl p-3 text-left text-brand-700 border border-dashed border-ink-300 hover:bg-ink-50"
+              className="flex w-full items-center gap-3 rounded-2xl border border-dashed border-ink-300 p-3 text-start text-brand-700 hover:bg-ink-50"
             >
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50">
                 <Plus className="h-5 w-5" />
               </span>
-              <span className="font-medium">Create or join a workspace</span>
+              <span className="font-medium">{t('workspace.addOrJoin')}</span>
             </button>
           </li>
         </ul>

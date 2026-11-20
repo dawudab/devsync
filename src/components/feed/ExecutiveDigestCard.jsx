@@ -44,7 +44,7 @@ export function ExecutiveDigestCard({ updates, milestones, digests }) {
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-white/80">
           <Sparkles className="h-3.5 w-3.5" /> {t('feed.digestTitle')}
         </span>
-        <Badge tone={health.tone}>{health.label}</Badge>
+        <Badge tone={health.tone}>{t(`feed.health.${healthKey}`)}</Badge>
       </div>
 
       <h2 className="mt-2.5 text-lg font-bold leading-snug">{headline}</h2>
