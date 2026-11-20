@@ -1,20 +1,22 @@
 import { NavLink } from 'react-router-dom';
 import { Newspaper, Map as MapIcon, ClipboardList, Activity, Settings } from 'lucide-react';
 import { useWorkspace } from '@/context/WorkspaceContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useTickets } from '@/hooks/useWorkspaceData';
 import { cn } from '@/lib/utils';
 
 export function BottomNav() {
   const { isDeveloper } = useWorkspace();
+  const { t } = useLanguage();
   const { tickets } = useTickets();
   const openTickets = tickets.filter((t) => t.status !== 'completed').length;
 
   const items = [
-    { to: '/', label: 'Feed', icon: Newspaper, end: true },
-    { to: '/roadmap', label: 'Roadmap', icon: MapIcon },
-    { to: '/requests', label: 'Requests', icon: ClipboardList, badge: openTickets },
-    ...(isDeveloper ? [{ to: '/activity', label: 'Webhooks', icon: Activity }] : []),
-    { to: '/settings', label: 'Settings', icon: Settings },
+    { to: '/', label: t('nav.feed'), icon: Newspaper, end: true },
+    { to: '/roadmap', label: t('nav.roadmap'), icon: MapIcon },
+    { to: '/requests', label: t('nav.requests'), icon: ClipboardList, badge: openTickets },
+    ...(isDeveloper ? [{ to: '/activity', label: t('nav.webhooks'), icon: Activity }] : []),
+    { to: '/settings', label: t('nav.settings'), icon: Settings },
   ];
 
   return (

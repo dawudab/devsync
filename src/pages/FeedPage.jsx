@@ -5,6 +5,7 @@ import { Github } from '@/components/ui/GithubIcon';
 import { useNow } from '@/hooks/useNow';
 import { useAuth } from '@/context/AuthContext';
 import { useWorkspace } from '@/context/WorkspaceContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useFeed, useTickets, useMilestones, useWeeklyDigests } from '@/hooks/useWorkspaceData';
 import { FeedCard } from '@/components/feed/FeedCard';
 import { DevStats } from '@/components/feed/DevStats';
@@ -28,15 +29,16 @@ const FILTERS = [
 const WEEK = 7 * 24 * 3600 * 1000;
 
 function OwnerOverview({ updates, tickets }) {
+  const { t } = useLanguage();
   const since = useNow() - WEEK;
   const recent = updates.filter((u) => u.createdAt >= since);
   const shipped = recent.filter((u) => deliveryStatus(u).label === 'Shipped').length;
   const inProgress = recent.length - shipped;
   const openRequests = tickets.filter((t) => t.status !== 'completed').length;
   const items = [
-    { label: 'Shipped this week', value: shipped, icon: Rocket, color: 'bg-emerald-50 text-emerald-600' },
-    { label: 'In the works', value: inProgress, icon: Hammer, color: 'bg-sky-50 text-sky-600' },
-    { label: 'Open requests', value: openRequests, icon: ClipboardList, color: 'bg-amber-50 text-amber-600', to: '/requests' },
+    { label: t('feed.shippedWeek'), value: shipped, icon: Rocket, color: 'bg-emerald-50 text-emerald-600' },
+    { label: t('feed.inWorks'), value: inProgress, icon: Hammer, color: 'bg-sky-50 text-sky-600' },
+    { label: t('feed.openRequests'), value: openRequests, icon: ClipboardList, color: 'bg-amber-50 text-amber-600', to: '/requests' },
   ];
   return (
     <div className="grid grid-cols-3 gap-2.5">
@@ -68,6 +70,7 @@ function OwnerOverview({ updates, tickets }) {
 export function FeedPage() {
   const { user } = useAuth();
   const { workspace, isDeveloper } = useWorkspace();
+  const { t } = useLanguage();
   const { updates, loading } = useFeed();
   const { tickets } = useTickets();
   const { milestones } = useMilestones();
@@ -88,12 +91,12 @@ export function FeedPage() {
     <div className="space-y-5">
       {isDeveloper ? (
         <PageHeader
-          title="Developer Feed"
+          title={t('feed.devTitle')}
           subtitle={repo ? <span className="font-mono text-xs">{repo.fullName}</span> : 'No repository connected'}
           action={repo && <SimulateEventButton />}
         />
       ) : (
-        <PageHeader title={greeting(user?.displayName)} subtitle={workspace?.businessProfile?.tagline || 'Executive overview & recent product updates.'} />
+        <PageHeader title={greeting(user?.displayName)} subtitle={workspace?.businessProfile?.tagline || t('feed.ownerSub')} />
       )}
 
       <DeletionRequestBanner />

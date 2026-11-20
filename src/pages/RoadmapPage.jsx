@@ -4,6 +4,7 @@ import { backend } from '@/lib/data';
 import { MILESTONE_STATUSES } from '@/lib/constants';
 import { useAuth } from '@/context/AuthContext';
 import { useWorkspace } from '@/context/WorkspaceContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/context/ToastContext';
 import { useMilestones, useTickets, useFeed } from '@/hooks/useWorkspaceData';
 import { PageHeader } from '@/components/layout/AppShell';
@@ -18,6 +19,7 @@ const STATUS_TONE = Object.fromEntries(MILESTONE_STATUSES.map((s) => [s.value, s
 export function RoadmapPage() {
   const { user } = useAuth();
   const { workspaceId, isOwner, isDeveloper } = useWorkspace();
+  const { t } = useLanguage();
   const toast = useToast();
   const { milestones, loading } = useMilestones();
   const { tickets } = useTickets();
@@ -96,12 +98,12 @@ export function RoadmapPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Roadmap"
-        subtitle="Project phases, target dates, and delivery progress."
+        title={t('roadmap.title')}
+        subtitle={t('roadmap.subtitle')}
         action={
           isOwner && (
             <Button size="sm" icon={Plus} onClick={() => setCreating(true)}>
-              New milestone
+              {t('roadmap.newMilestone')}
             </Button>
           )
         }

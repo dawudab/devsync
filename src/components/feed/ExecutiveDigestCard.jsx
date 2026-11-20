@@ -1,5 +1,6 @@
 import { Sparkles, CheckCircle2, AlertCircle, Clock, Milestone } from 'lucide-react';
 import { useNow } from '@/hooks/useNow';
+import { useLanguage } from '@/context/LanguageContext';
 import { Badge } from '@/components/ui/Badge';
 import { deliveryStatus } from '@/lib/utils';
 
@@ -12,6 +13,7 @@ const HEALTH_META = {
 };
 
 export function ExecutiveDigestCard({ updates, milestones, digests }) {
+  const { t } = useLanguage();
   const since = useNow() - WEEK;
   const recent = updates.filter((u) => u.createdAt >= since);
   const shippedCount = recent.filter((u) => deliveryStatus(u).label === 'Shipped').length;
@@ -40,7 +42,7 @@ export function ExecutiveDigestCard({ updates, milestones, digests }) {
     <section className="rounded-3xl bg-gradient-to-br from-brand-600 via-brand-700 to-ink-900 p-5 text-white shadow-card">
       <div className="flex items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-white/80">
-          <Sparkles className="h-3.5 w-3.5" /> Weekly Executive Digest
+          <Sparkles className="h-3.5 w-3.5" /> {t('feed.digestTitle')}
         </span>
         <Badge tone={health.tone}>{health.label}</Badge>
       </div>
@@ -51,13 +53,13 @@ export function ExecutiveDigestCard({ updates, milestones, digests }) {
       <div className="mt-4 grid grid-cols-3 gap-2 rounded-2xl bg-white/10 p-3 backdrop-blur-sm">
         <div className="text-center">
           <div className="flex items-center justify-center gap-1 text-xs text-white/70">
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" /> Shipped
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" /> {t('feed.shipped')}
           </div>
           <p className="mt-0.5 text-lg font-bold tabular-nums">{shippedCount}</p>
         </div>
         <div className="border-x border-white/10 text-center">
           <div className="flex items-center justify-center gap-1 text-xs text-white/70">
-            <Milestone className="h-3.5 w-3.5 text-sky-300" /> Milestones
+            <Milestone className="h-3.5 w-3.5 text-sky-300" /> {t('feed.milestones')}
           </div>
           <p className="mt-0.5 text-lg font-bold tabular-nums">{activeMilestones}</p>
         </div>
@@ -68,7 +70,7 @@ export function ExecutiveDigestCard({ updates, milestones, digests }) {
             ) : (
               <Clock className="h-3.5 w-3.5 text-white/70" />
             )}
-            Sign-offs
+            {t('feed.signOffs')}
           </div>
           <p className="mt-0.5 text-lg font-bold tabular-nums">{pendingApprovals}</p>
         </div>

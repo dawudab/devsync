@@ -1,11 +1,13 @@
 import { backend } from '@/lib/data';
 import { useWorkspace } from '@/context/WorkspaceContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { roleMeta } from '@/lib/constants';
 import { Badge } from '@/components/ui/Badge';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 export function Header() {
   const { role } = useWorkspace();
+  const { t } = useLanguage();
   const meta = roleMeta(role);
 
   return (
@@ -19,7 +21,7 @@ export function Header() {
         <WorkspaceSwitcher />
         {role && (
           <Badge tone={meta.tone} className="shrink-0">
-            {meta.label}
+            {t(`role.${role}`)}
           </Badge>
         )}
       </div>

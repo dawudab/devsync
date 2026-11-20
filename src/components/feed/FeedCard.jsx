@@ -2,6 +2,7 @@ import { memo, useState } from 'react';
 import { MessageCircle, CheckCircle2, RotateCcw } from 'lucide-react';
 import { backend } from '@/lib/data';
 import { useWorkspace } from '@/context/WorkspaceContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/context/ToastContext';
 import { IMPACT_META, approvalMeta } from '@/lib/constants';
 import { cn, deliveryStatus, timeAgo, formatDateTime } from '@/lib/utils';
@@ -15,6 +16,7 @@ import { CommentThread } from './CommentThread';
 
 export const FeedCard = memo(function FeedCard({ update, highlighted = false, style }) {
   const { workspaceId, isDeveloper, isOwner, author } = useWorkspace();
+  const { t } = useLanguage();
   const toast = useToast();
   const [showComments, setShowComments] = useState(false);
   const [tweaking, setTweaking] = useState(false);
@@ -82,12 +84,12 @@ export const FeedCard = memo(function FeedCard({ update, highlighted = false, st
               <div className="flex items-center gap-2">
                 {update.approvalStatus !== 'approved' && (
                   <Button size="sm" variant="primary" icon={CheckCircle2} loading={busy} onClick={() => setApproval('approved')}>
-                    Approve Update
+                    {t('feed.approveUpdate')}
                   </Button>
                 )}
                 {update.approvalStatus !== 'changes_requested' && (
                   <Button size="sm" variant="secondary" icon={RotateCcw} disabled={busy} onClick={() => setTweaking(true)}>
-                    Request Tweaks
+                    {t('feed.requestTweaks')}
                   </Button>
                 )}
               </div>

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Plus, ClipboardList } from 'lucide-react';
 import { useWorkspace } from '@/context/WorkspaceContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useTickets } from '@/hooks/useWorkspaceData';
 import { TICKET_STATUSES, STATUS_ICONS } from '@/lib/constants';
 import { PageHeader } from '@/components/layout/AppShell';
@@ -15,6 +16,7 @@ const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
 
 export function RequestsPage() {
   const { isDeveloper, isTeamMember } = useWorkspace();
+  const { t } = useLanguage();
   const { tickets, loading } = useTickets();
   const [creating, setCreating] = useState(false);
   const [openId, setOpenId] = useState(null);
@@ -46,7 +48,7 @@ export function RequestsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={isDeveloper ? 'Ticket board' : 'Requests & Ideas'}
+        title={isDeveloper ? t('requests.board') : t('requests.title')}
         subtitle={
           isDeveloper
             ? 'Change requests and team suggestions, sorted by priority.'
@@ -56,7 +58,7 @@ export function RequestsPage() {
         }
         action={
           <Button size="sm" icon={Plus} onClick={() => setCreating(true)} className="hidden sm:inline-flex">
-            {isTeamMember ? 'New suggestion' : 'New request'}
+            {isTeamMember ? t('requests.newSuggestion') : t('requests.newRequest')}
           </Button>
         }
       />

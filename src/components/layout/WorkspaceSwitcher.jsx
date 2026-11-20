@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { Check, ChevronDown, Plus, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useWorkspace } from '@/context/WorkspaceContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { roleMeta } from '@/lib/constants';
 import { Sheet } from '@/components/ui/Sheet';
 import { cn } from '@/lib/utils';
 
 export function WorkspaceSwitcher() {
   const { workspaces, workspace, workspaceId, switchWorkspace } = useWorkspace();
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -19,7 +21,7 @@ export function WorkspaceSwitcher() {
         </span>
         <span className="min-w-0">
           <span className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-ink-400">
-            <Lock className="h-3 w-3" /> Private workspace
+            <Lock className="h-3 w-3" /> {t('workspace.private')}
           </span>
           <span className="flex items-center gap-1 truncate text-[15px] font-semibold leading-tight text-ink-900">
             <span className="truncate">{workspace?.name || 'DevSync'}</span>

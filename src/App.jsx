@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { WorkspaceProvider, useWorkspace } from '@/context/WorkspaceContext';
 import { ToastProvider } from '@/context/ToastContext';
+import { LanguageProvider } from '@/context/LanguageContext';
 import { AppShell } from '@/components/layout/AppShell';
 import { FullScreenLoader } from '@/components/ui/Feedback';
 import { SignInPage } from '@/pages/SignInPage';
@@ -48,13 +49,15 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-      <ToastProvider>
-        <AuthProvider>
-          <WorkspaceProvider>
-            <AppRoutes />
-          </WorkspaceProvider>
-        </AuthProvider>
-      </ToastProvider>
+      <LanguageProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <WorkspaceProvider>
+              <AppRoutes />
+            </WorkspaceProvider>
+          </AuthProvider>
+        </ToastProvider>
+      </LanguageProvider>
     </BrowserRouter>
   );
 }
