@@ -20,7 +20,7 @@ import { createLocalBackend } from './localBackend';
  * Tickets:    subscribeTickets(wsId, cb), createTicket(wsId, data, author), updateTicket(wsId, ticketId, patch, actor, activityEntry?)
  * Milestones: subscribeMilestones(wsId, cb), createMilestone(wsId, data, uid), updateMilestone(wsId, milestoneId, patch), deleteMilestone(wsId, milestoneId)
  * Digests:    subscribeWeeklyDigests(wsId, cb)
- * GitHub:     startGithubInstall(wsId), selectRepository(wsId, repoId), disconnectGithub(wsId), subscribeWebhookLogs(wsId, cb)
+ * GitHub:     startGithubInstall(wsId), selectRepository(wsId, repoId), syncGithubInstallation(wsId, installationId?), disconnectGithub(wsId), subscribeWebhookLogs(wsId, cb)
  * Testing:    simulateEvent(wsId)
  *
  * All subscribe* functions return an unsubscribe function and deliver plain objects with

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Building2, Code2, KeyRound, Copy, Check, ArrowRight, Share2 } from 'lucide-react';
+import { ArrowLeft, Building2, Code2, KeyRound } from 'lucide-react';
 import { backend } from '@/lib/data';
 import { useAuth } from '@/context/AuthContext';
 import { useWorkspace } from '@/context/WorkspaceContext';
@@ -8,14 +8,14 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/context/ToastContext';
 import { Button } from '@/components/ui/Button';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
-import { cn, formatInviteMessage, shareInvite } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 
 const inputCls =
   'h-12 w-full rounded-xl border-0 bg-ink-50 px-4 text-[15px] text-ink-900 ring-1 ring-inset ring-ink-200 placeholder:text-ink-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500';
 
 export function OnboardingPage() {
   const { user, signOut } = useAuth();
-  const { workspaces, switchWorkspace } = useWorkspace();
+  const { workspaces, switchWorkspace, activateCreatedWorkspace } = useWorkspace();
   const { t } = useLanguage();
   const toast = useToast();
   const navigate = useNavigate();
@@ -28,24 +28,24 @@ export function OnboardingPage() {
   const [tagline, setTagline] = useState('');
   const [code, setCode] = useState(initialCode);
   const [busy, setBusy] = useState(false);
-  const [createdInfo, setCreatedInfo] = useState(null);
-  const [copied, setCopied] = useState(false);
 
   const hasWorkspaces = workspaces?.length > 0;
 
   const submit = async (e) => {
     e.preventDefault();
+    if (busy) return;
     setBusy(true);
     try {
       if (mode === 'create') {
-        const wsId = await backend.createWorkspace(user, name, creatorRole, {
-          businessProfile: { tagline: tagline.trim(), industry: '' },
-        });
+        const cleanName = name.trim();
+        const extras = { businessProfile: { tagline: tagline.trim(), industry: '' } };
+        const wsId = await backend.createWorkspace(user, cleanName, creatorRole, extras);
+        // Optimistically inject the workspace into context and set activeId immediately before navigating
+        activateCreatedWorkspace({ id: wsId, name: cleanName, role: creatorRole, extras });
         const targetRole = creatorRole === 'developer' ? 'owner' : 'developer';
-        const inviteCode = await backend.createInvite(wsId, name.trim(), targetRole, user.uid);
-        switchWorkspace(wsId);
-        setCreatedInfo({ wsId, businessName: name.trim(), inviteCode, targetRole, creatorRole });
+        backend.createInvite(wsId, cleanName, targetRole, user.uid).catch(() => {});
         toast.success(t('onboarding.createBtn'));
+        navigate(creatorRole === 'developer' ? '/settings' : '/', { replace: true });
       } else {
         const wsId = await backend.joinWorkspace(code);
         switchWorkspace(wsId);
@@ -54,86 +54,9 @@ export function OnboardingPage() {
       }
     } catch (err) {
       toast.error(err);
-    } finally {
       setBusy(false);
     }
   };
-
-  const copyInvite = async (text) => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
-
-  if (createdInfo) {
-    const shareMsg = formatInviteMessage({
-      inviterName: user?.displayName,
-      role: createdInfo.targetRole,
-      businessName: createdInfo.businessName,
-      inviteCode: createdInfo.inviteCode,
-    });
-    const isDevCreator = createdInfo.creatorRole === 'developer';
-    const handleShare = async () => {
-      const res = await shareInvite({
-        inviterName: user?.displayName,
-        role: createdInfo.targetRole,
-        businessName: createdInfo.businessName,
-        inviteCode: createdInfo.inviteCode,
-      });
-      if (res === 'copied') toast.success(t('settings.copyInviteMessage'));
-    };
-
-    return (
-      <div className="mx-auto flex min-h-dvh max-w-md flex-col px-5 pb-8 pt-[calc(env(safe-area-inset-top)+2rem)]">
-        <img src="/favicon.svg" alt="DevSync" className="h-10 w-10 rounded-xl" />
-        <h1 className="mt-6 text-2xl font-bold tracking-tight text-ink-900">
-          {isDevCreator ? t('onboarding.readyOwnerTitle') : t('onboarding.readyDevTitle')}
-        </h1>
-        <p className="mt-1.5 text-sm text-ink-500">
-          {isDevCreator ? t('onboarding.readyOwnerSub') : t('onboarding.readyDevSub')}
-        </p>
-
-        <div className="mt-6 space-y-3 rounded-3xl bg-white p-5 shadow-card ring-1 ring-ink-100">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">
-            {createdInfo.targetRole === 'owner' ? t('onboarding.ownerCodeLabel') : t('onboarding.devCodeLabel')}
-          </p>
-          <div className="flex items-center gap-2">
-            <code className="flex h-12 flex-1 items-center justify-center rounded-xl bg-ink-50 font-mono text-2xl font-bold tracking-[0.25em] text-ink-900 ring-1 ring-inset ring-ink-200">
-              {createdInfo.inviteCode}
-            </code>
-            <Button variant="secondary" size="icon" onClick={() => copyInvite(createdInfo.inviteCode)} aria-label="Copy invite code">
-              {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
-            </Button>
-          </div>
-          <p className="rounded-2xl bg-ink-50 p-3 text-xs leading-relaxed text-ink-600 ring-1 ring-inset ring-ink-100">{shareMsg}</p>
-          <div className="grid grid-cols-2 gap-2">
-            <Button variant="secondary" size="sm" icon={Copy} onClick={() => copyInvite(shareMsg)}>
-              {t('settings.copyInviteMessage')}
-            </Button>
-            <Button variant="primary" size="sm" icon={Share2} onClick={handleShare}>
-              {t('settings.share')}
-            </Button>
-          </div>
-        </div>
-
-        <div className="mt-auto space-y-2.5 pt-8">
-          <Button
-            size="lg"
-            className="w-full"
-            icon={ArrowRight}
-            onClick={() => navigate(isDevCreator ? '/settings' : '/', { replace: true })}
-          >
-            {isDevCreator ? t('onboarding.connectGithub') : t('onboarding.openDashboard')}
-          </Button>
-          {isDevCreator && (
-            <Button size="lg" variant="ghost" className="w-full" onClick={() => navigate('/', { replace: true })}>
-              {t('onboarding.skip')}
-            </Button>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col px-5 pb-8 pt-[calc(env(safe-area-inset-top)+1.5rem)]">

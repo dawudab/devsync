@@ -66,7 +66,7 @@ function resizeAvatarFile(file) {
 
 export function SettingsPage() {
   const { user, signOut, updateUserProfile } = useAuth();
-  const { workspaces, workspace, workspaceId, role, isOwner, isDeveloper } = useWorkspace();
+  const { workspaces, workspace, workspaceId, role, isOwner, isDeveloper, switchWorkspace } = useWorkspace();
   const { lang, setLang, t } = useLanguage();
   const toast = useToast();
   const [params, setParams] = useSearchParams();
@@ -98,11 +98,27 @@ export function SettingsPage() {
 
   useEffect(() => {
     const status = params.get('github');
-    if (!status) return;
-    if (status === 'connected') toast.success('GitHub App installed — choose your repository below');
-    else toast.error(GITHUB_ERRORS[params.get('reason')] || 'GitHub connection failed');
+    const wsParam = params.get('ws');
+    const instParam = params.get('installation_id');
+    if (!status && !instParam) return;
+    if (wsParam && wsParam !== workspaceId) {
+      switchWorkspace(wsParam);
+    }
+    if (instParam && workspaceId) {
+      backend
+        .syncGithubInstallation?.(wsParam || workspaceId, instParam)
+        .then((res) => {
+          if (res?.linked) toast.success('GitHub App installed — choose your repository below');
+        })
+        .catch(toast.error);
+    } else if (status === 'connected') {
+      toast.success('GitHub App installed — choose your repository below');
+      backend.syncGithubInstallation?.(wsParam || workspaceId).catch(() => {});
+    } else if (status) {
+      toast.error(GITHUB_ERRORS[params.get('reason')] || 'GitHub connection failed');
+    }
     setParams({}, { replace: true });
-  }, [params, setParams, toast]);
+  }, [params, setParams, toast, workspaceId, switchWorkspace]);
 
   const copyMessage = async (inv) => {
     const msg = formatInviteMessage({

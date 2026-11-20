@@ -1,6 +1,12 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  memoryLocalCache,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  connectFirestoreEmulator,
+} from 'firebase/firestore';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 
 const env = import.meta.env;
@@ -19,14 +25,26 @@ export const simulatorEnabled = !isFirebaseConfigured || env.VITE_ENABLE_SIMULAT
 
 let services = null;
 
+function createFirestoreInstance(app) {
+  try {
+    return initializeFirestore(app, {
+      experimentalAutoDetectLongPolling: true,
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+  } catch {
+    return initializeFirestore(app, {
+      experimentalAutoDetectLongPolling: true,
+      localCache: memoryLocalCache(),
+    });
+  }
+}
+
 export function getFirebase() {
   if (!isFirebaseConfigured) throw new Error('Firebase is not configured');
   if (services) return services;
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
-  const db = initializeFirestore(app, {
-    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-  });
+  const db = createFirestoreInstance(app);
   const functions = getFunctions(app);
   if (env.VITE_USE_EMULATORS === 'true') {
     connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });

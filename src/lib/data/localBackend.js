@@ -416,10 +416,45 @@ export function createLocalBackend() {
     },
 
     async selectRepository(wsId, repoId) {
-      const { ws } = assertMember(wsId, ['developer']);
-      const repo = ws.github?.repos?.find((r) => r.id === repoId);
+      const { ws } = assertMember(wsId, ['developer', 'owner']);
+      const repo = ws.github?.repos?.find((r) => String(r.id) === String(repoId));
       if (!repo) throw new Error('Repository not found in this installation');
       store.update(wsPath(wsId), { github: { ...ws.github, selectedRepo: repo, status: 'connected', connectedAt: Date.now() } });
+      // Backfill initial activity if feed is empty
+      const existingUpdates = store.list(`${wsPath(wsId)}/updates`);
+      if (existingUpdates.length === 0) {
+        const now = Date.now();
+        [0, 1, 2].forEach((scenarioIdx, i) => {
+          const at = new Date(now - (3 - i) * 3600_000);
+          const { event, payload } = createSampleEvent(repo, scenarioIdx, at);
+          const { change } = normalizeGithubEvent(event, payload);
+          if (!change) return;
+          change.stats.additions ??= 18 + i * 24;
+          change.stats.deletions ??= 4 + i * 6;
+          const deliveryId = `backfill-${repo.id}-${i}`;
+          store.set(`${wsPath(wsId)}/updates/${generateId()}`, {
+            ...buildUpdateDoc(change, heuristicTranslate(change), { deliveryId }),
+            approvalStatus: 'pending',
+            createdAt: at.getTime(),
+          });
+          log(wsId, {
+            event,
+            action: 'backfill',
+            deliveryId,
+            status: 'processed',
+            message: `Initial sync · translated ${change.commits.length} commit(s) on ${change.branch}`,
+            repo: repo.fullName,
+            durationMs: 420,
+          });
+        });
+      }
+      return { ok: true, imported: existingUpdates.length === 0 ? 3 : 0 };
+    },
+
+    async syncGithubInstallation(wsId) {
+      const { ws } = assertMember(wsId, ['developer', 'owner']);
+      if (!ws.github) return { linked: false };
+      return { linked: true, status: ws.github.status, selectedRepo: ws.github.selectedRepo };
     },
 
     async disconnectGithub(wsId) {

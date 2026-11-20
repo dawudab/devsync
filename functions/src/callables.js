@@ -1,11 +1,11 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from './admin.js';
-import { signState } from './github.js';
-import { translate } from './pipeline.js';
+import { createGitHubApp, signState } from './github.js';
+import { backfillRepositoryActivity, translate } from './pipeline.js';
 import { normalizeGithubEvent } from './shared/github-events.js';
 import { createSampleEvent } from './shared/sample-events.js';
-import { ALLOW_SIMULATION, GEMINI_API_KEY, GITHUB_APP_SLUG, STATE_SECRET } from './config.js';
+import { ALLOW_SIMULATION, GEMINI_API_KEY, GITHUB_APP_ID, GITHUB_APP_SLUG, GITHUB_PRIVATE_KEY, STATE_SECRET } from './config.js';
 
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
 
@@ -23,23 +23,95 @@ const opts = { maxInstances: 10, enforceAppCheck: false };
 
 export const createInstallUrl = onCall({ ...opts, secrets: [STATE_SECRET] }, async (request) => {
   const { workspaceId } = request.data || {};
-  await requireMember(request, workspaceId, ['developer']);
+  await requireMember(request, workspaceId, ['developer', 'owner']);
   const state = signState({ ws: workspaceId, uid: request.auth.uid }, STATE_SECRET.value());
   return { url: `https://github.com/apps/${GITHUB_APP_SLUG.value()}/installations/new?state=${encodeURIComponent(state)}` };
 });
 
-export const selectRepository = onCall(opts, async (request) => {
+export const selectRepository = onCall({ ...opts, secrets: [GITHUB_PRIVATE_KEY] }, async (request) => {
   const { workspaceId, repoId } = request.data || {};
-  const { ref, ws } = await requireMember(request, workspaceId, ['developer']);
-  const repo = ws.github?.repos?.find((r) => r.id === repoId);
+  const { ref, ws } = await requireMember(request, workspaceId, ['developer', 'owner']);
+  const repo = ws.github?.repos?.find((r) => String(r.id) === String(repoId));
   if (!repo) throw new HttpsError('not-found', 'Repository is not part of this installation');
-  await ref.update({ 'github.selectedRepo': repo, 'github.status': 'connected' });
-  return { ok: true };
+  await ref.update({ 'github.selectedRepo': repo, 'github.status': 'connected', 'github.connectedAt': FieldValue.serverTimestamp() });
+  const { imported } = await backfillRepositoryActivity(workspaceId, ws.github.installationId, repo);
+  return { ok: true, imported };
+});
+
+export const syncGithubInstallation = onCall({ ...opts, secrets: [GITHUB_PRIVATE_KEY] }, async (request) => {
+  const { workspaceId, installationId: requestedInstId } = request.data || {};
+  const { ref, ws } = await requireMember(request, workspaceId, ['developer', 'owner']);
+  try {
+    const github = createGitHubApp({ appId: GITHUB_APP_ID.value(), privateKey: GITHUB_PRIVATE_KEY.value() });
+
+    let installationId = requestedInstId ? Number(requestedInstId) : ws.github?.installationId;
+    let installation = null;
+
+    if (installationId) {
+      installation = await github.getInstallation(installationId).catch(() => null);
+    }
+
+    if (!installation) {
+      const all = await github.listAppInstallations().catch(() => []);
+      for (const candidate of all || []) {
+        if (candidate.suspended_at) continue;
+        const linkSnap = await db.doc(`installations/${candidate.id}`).get();
+        if (!linkSnap.exists || linkSnap.data()?.workspaceId === workspaceId) {
+          installation = candidate;
+          installationId = candidate.id;
+          break;
+        }
+      }
+    }
+
+    if (!installation || !installationId) {
+      return { linked: false };
+    }
+
+    const repos = await github.listInstallationRepos(installationId);
+    const existingSelected = ws.github?.selectedRepo && repos.find((r) => String(r.id) === String(ws.github.selectedRepo.id));
+    const selectedRepo = existingSelected || (repos.length === 1 ? repos[0] : null);
+    const status = selectedRepo ? 'connected' : 'pending_selection';
+
+    const linkRef = db.doc(`installations/${installationId}`);
+    await db.runTransaction(async (tx) => {
+      const linkSnap = await tx.get(linkRef);
+      if (linkSnap.exists && linkSnap.data().workspaceId !== workspaceId) {
+        throw new HttpsError('already-exists', 'That GitHub installation is linked to another workspace');
+      }
+      tx.set(linkRef, {
+        workspaceId,
+        account: installation.account?.login || null,
+        linkedBy: request.auth.uid,
+        linkedAt: FieldValue.serverTimestamp(),
+      });
+      tx.update(ref, {
+        github: {
+          installationId,
+          account: { login: installation.account?.login || null, type: installation.account?.type || null },
+          repos,
+          selectedRepo,
+          status,
+          connectedAt: FieldValue.serverTimestamp(),
+        },
+      });
+    });
+
+    let imported = 0;
+    if (selectedRepo) {
+      const res = await backfillRepositoryActivity(workspaceId, installationId, selectedRepo);
+      imported = res.imported;
+    }
+    return { linked: true, status, selectedRepo, repoCount: repos.length, imported };
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    return { linked: false, reason: err.message };
+  }
 });
 
 export const disconnectGithub = onCall(opts, async (request) => {
   const { workspaceId } = request.data || {};
-  const { ref, ws } = await requireMember(request, workspaceId, ['developer']);
+  const { ref, ws } = await requireMember(request, workspaceId, ['developer', 'owner']);
   const batch = db.batch();
   if (ws.github?.installationId) batch.delete(db.doc(`installations/${ws.github.installationId}`));
   batch.update(ref, { github: null });

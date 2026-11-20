@@ -4,6 +4,7 @@ export { processWebhookLog } from './src/pipeline.js';
 export {
   createInstallUrl,
   selectRepository,
+  syncGithubInstallation,
   disconnectGithub,
   joinWorkspace,
   updateMemberRole,

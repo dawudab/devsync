@@ -6,7 +6,21 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(undefined);
 
-  useEffect(() => backend.onAuthChange(setUser), []);
+  useEffect(() => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) setUser((prev) => (prev === undefined ? null : prev));
+    }, 4500);
+    const unsub = backend.onAuthChange((u) => {
+      settled = true;
+      clearTimeout(timer);
+      setUser(u);
+    });
+    return () => {
+      clearTimeout(timer);
+      unsub?.();
+    };
+  }, []);
 
   const updateUserProfile = useCallback(
     async (profile, workspaceIds = []) => {

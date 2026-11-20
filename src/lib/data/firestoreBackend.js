@@ -1,8 +1,10 @@
 import {
+  getRedirectResult,
   GoogleAuthProvider,
   onAuthStateChanged,
   signInAnonymously,
   signInWithPopup,
+  signInWithRedirect,
   signOut as fbSignOut,
   updateProfile,
 } from 'firebase/auth';
@@ -60,12 +62,22 @@ export function createFirestoreBackend() {
     mode: 'firebase',
 
     onAuthChange(cb) {
+      getRedirectResult(auth).catch(() => {});
       return onAuthStateChanged(auth, (u) =>
         cb(u ? { uid: u.uid, displayName: u.displayName || 'Guest', email: u.email || null, photoURL: u.photoURL, isAnonymous: u.isAnonymous } : null),
       );
     },
     async signInWithGoogle() {
-      await signInWithPopup(auth, new GoogleAuthProvider());
+      const provider = new GoogleAuthProvider();
+      try {
+        await signInWithPopup(auth, provider);
+      } catch (err) {
+        if (err?.code === 'auth/popup-blocked' || err?.code === 'auth/operation-not-supported-in-this-environment') {
+          await signInWithRedirect(auth, provider);
+          return;
+        }
+        throw err;
+      }
     },
     async signInAsGuest(name) {
       const cred = await signInAnonymously(auth);
@@ -104,7 +116,12 @@ export function createFirestoreBackend() {
 
     subscribeMyWorkspaces(uid, cb) {
       let inner = [];
-      const stopInner = () => inner.forEach((u) => u());
+      let graceTimer = null;
+      const stopInner = () => {
+        clearTimeout(graceTimer);
+        inner.forEach((u) => u());
+        inner = [];
+      };
       const outer = onSnapshot(
         doc(db, 'users', uid),
         (snap) => {
@@ -112,18 +129,25 @@ export function createFirestoreBackend() {
           const ids = (snap.data()?.workspaceIds || []).slice(0, 50);
           if (!ids.length) return cb([]);
           const results = new Map();
-          const emit = () => results.size === ids.length && cb(ids.map((id) => results.get(id)).filter(Boolean));
+          const emitNow = () => cb(ids.map((id) => results.get(id)).filter(Boolean));
+          const emitIfComplete = () => {
+            if (results.size === ids.length) {
+              clearTimeout(graceTimer);
+              emitNow();
+            }
+          };
+          graceTimer = setTimeout(emitNow, 2000);
           inner = ids.map((id) =>
             onSnapshot(
               ws(id),
               (s) => {
                 const w = s.data();
                 results.set(id, w?.members?.[uid] ? { id, name: w.name, role: w.members[uid] } : null);
-                emit();
+                emitIfComplete();
               },
               () => {
                 results.set(id, null);
-                emit();
+                emitIfComplete();
               },
             ),
           );
@@ -202,7 +226,9 @@ export function createFirestoreBackend() {
     },
 
     subscribeInvites(wsId, cb) {
-      return listen(query(collection(db, 'invites'), where('workspaceId', '==', wsId)), cb);
+      return listen(query(collection(db, 'invites'), where('workspaceId', '==', wsId)), (list) =>
+        cb([...list].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))),
+      );
     },
 
     async createInvite(wsId, workspaceName, role, creatorUid) {
@@ -342,6 +368,7 @@ export function createFirestoreBackend() {
       return { redirected: true };
     },
     selectRepository: (wsId, repoId) => call('selectRepository', { workspaceId: wsId, repoId }),
+    syncGithubInstallation: (wsId, installationId) => call('syncGithubInstallation', { workspaceId: wsId, installationId }),
     disconnectGithub: (wsId) => call('disconnectGithub', { workspaceId: wsId }),
 
     subscribeWebhookLogs(wsId, cb) {

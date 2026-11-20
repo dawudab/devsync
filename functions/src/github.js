@@ -18,7 +18,7 @@ export function verifyWebhookSignature(rawBody, signatureHeader, secret) {
 }
 
 const b64url = (input) => Buffer.from(input).toString('base64url');
-const normalizeKey = (key) => key.replace(/\\n/g, '\n');
+const normalizeKey = (key) => String(key || '').trim().replace(/\\n/g, '\n');
 
 export function createAppJwt(appId, privateKey) {
   const now = Math.floor(Date.now() / 1000);
@@ -64,6 +64,9 @@ export function createGitHubApp({ appId, privateKey }) {
   return {
     /** Verifies the installation belongs to this App (404 otherwise). */
     getInstallation: (installationId) => gh(`/app/installations/${installationId}`, { token: appJwt() }),
+
+    /** Lists all installations of this GitHub App using the App JWT. */
+    listAppInstallations: () => gh('/app/installations?per_page=50', { token: appJwt() }),
 
     async listInstallationRepos(installationId) {
       const token = await installationToken(installationId);
