@@ -6,7 +6,7 @@ import { createLocalBackend } from './localBackend';
  * Backend contract (implemented by both firestoreBackend and localBackend):
  *
  * mode: 'firebase' | 'demo'
- * Auth:       onAuthChange(cb), signInWithGoogle(), signInAsGuest(name), signOut()
+ * Auth:       onAuthChange(cb), signInWithGoogle(), signInAsGuest(name), signOut(), updateUserProfile(user, profile, workspaceIds?)
  * Workspaces: subscribeMyWorkspaces(uid, cb), subscribeWorkspace(wsId, cb),
  *             createWorkspace(user, name, creatorRole?, extras?), updateWorkspace(wsId, patch), deleteWorkspace(wsId, uid?),
  *             requestWorkspaceDeletion(wsId, reason, actor), resolveDeletionRequest(wsId, status),

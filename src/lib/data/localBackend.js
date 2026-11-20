@@ -6,9 +6,18 @@ import { buildDemoSeed, DEMO_PERSONAS } from './demoSeed';
 import { generateId, generateInviteCode, generateShortInviteCode } from './ids';
 
 const PERSONA_KEY = 'devsync:demo-persona';
+const DEMO_PROFILES_KEY = 'devsync:demo-profiles';
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 const byDesc = (key) => (a, b) => (b[key] || 0) - (a[key] || 0);
 const byAsc = (key) => (a, b) => (a[key] || 0) - (b[key] || 0);
+
+function readDemoProfileOverrides() {
+  try {
+    return JSON.parse(localStorage.getItem(DEMO_PROFILES_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
 
 /**
  * Demo Mode backend: same contract as the Firestore backend, backed by localStorage.
@@ -18,7 +27,11 @@ export function createLocalBackend() {
   if (store.isEmpty()) store.reset(buildDemoSeed());
 
   const authListeners = new Set();
-  const persona = () => DEMO_PERSONAS[localStorage.getItem(PERSONA_KEY) || 'owner'] || DEMO_PERSONAS.owner;
+  const persona = () => {
+    const base = DEMO_PERSONAS[localStorage.getItem(PERSONA_KEY) || 'owner'] || DEMO_PERSONAS.owner;
+    const override = readDemoProfileOverrides()[base.uid];
+    return override ? { ...base, ...override } : base;
+  };
   const emitAuth = () => authListeners.forEach((cb) => cb({ ...persona() }));
   const wsPath = (wsId) => `workspaces/${wsId}`;
 
@@ -60,6 +73,28 @@ export function createLocalBackend() {
     async signInAsGuest() {},
     async signOut() {},
 
+    async updateUserProfile(user, { displayName, photoURL, title = '', bio = '' }, workspaceIds = []) {
+      const cleanName = (displayName || '').trim() || user.displayName || 'Member';
+      const cleanPhoto = photoURL === undefined ? user.photoURL || null : photoURL || null;
+      const overrides = readDemoProfileOverrides();
+      overrides[user.uid] = { displayName: cleanName, photoURL: cleanPhoto };
+      localStorage.setItem(DEMO_PROFILES_KEY, JSON.stringify(overrides));
+      const profileEntry = {
+        name: cleanName,
+        photoURL: cleanPhoto,
+        title: (title || '').trim(),
+        bio: (bio || '').trim(),
+      };
+      for (const wsId of workspaceIds) {
+        const ws = store.get(wsPath(wsId));
+        if (ws?.members?.[user.uid]) {
+          store.update(wsPath(wsId), { profiles: { ...ws.profiles, [user.uid]: profileEntry } });
+        }
+      }
+      emitAuth();
+      return { displayName: cleanName, photoURL: cleanPhoto };
+    },
+
     subscribeMyWorkspaces(uid, cb) {
       return store.watch(() => {
         const ids = store.get(`users/${uid}`)?.workspaceIds || [];
@@ -99,7 +134,12 @@ export function createLocalBackend() {
     },
 
     async updateWorkspace(wsId, patch) {
-      assertMember(wsId, ['owner']);
+      const keys = Object.keys(patch || {});
+      if (keys.every((k) => k === 'workspaceLinks')) {
+        assertMember(wsId, ['developer']);
+      } else {
+        assertMember(wsId, ['owner']);
+      }
       store.update(wsPath(wsId), patch);
     },
 

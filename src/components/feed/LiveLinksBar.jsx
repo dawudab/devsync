@@ -1,5 +1,4 @@
 import { ExternalLink, Globe, FlaskConical, Palette } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { useLanguage } from '@/context/LanguageContext';
 
@@ -10,23 +9,12 @@ const LINK_DEFS = [
 ];
 
 export function LiveLinksBar() {
-  const { workspace, isOwner } = useWorkspace();
+  const { workspace } = useWorkspace();
   const { t } = useLanguage();
   const links = workspace?.workspaceLinks || {};
   const configured = LINK_DEFS.filter((d) => links[d.key]?.trim());
 
-  if (!configured.length) {
-    if (!isOwner) return null;
-    return (
-      <Link
-        to="/settings"
-        className="flex items-center justify-between gap-2 rounded-2xl border border-dashed border-ink-300 bg-white/70 px-4 py-3 text-sm text-ink-600 transition hover:border-brand-300 hover:bg-white"
-      >
-        <span>{t('links.emptyPrompt')}</span>
-        <span className="shrink-0 font-semibold text-brand-600">{t('links.addLinks')}</span>
-      </Link>
-    );
-  }
+  if (!configured.length) return null;
 
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">

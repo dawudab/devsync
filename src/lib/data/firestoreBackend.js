@@ -61,7 +61,7 @@ export function createFirestoreBackend() {
 
     onAuthChange(cb) {
       return onAuthStateChanged(auth, (u) =>
-        cb(u ? { uid: u.uid, displayName: u.displayName || 'Guest', photoURL: u.photoURL, isAnonymous: u.isAnonymous } : null),
+        cb(u ? { uid: u.uid, displayName: u.displayName || 'Guest', email: u.email || null, photoURL: u.photoURL, isAnonymous: u.isAnonymous } : null),
       );
     },
     async signInWithGoogle() {
@@ -72,6 +72,35 @@ export function createFirestoreBackend() {
       if (name) await updateProfile(cred.user, { displayName: name });
     },
     signOut: () => fbSignOut(auth),
+
+    async updateUserProfile(user, { displayName, photoURL, title = '', bio = '' }, workspaceIds = []) {
+      const cleanName = (displayName || '').trim() || user.displayName || 'Member';
+      const cleanPhoto = photoURL === undefined ? user.photoURL || null : photoURL || null;
+      if (auth.currentUser) {
+        const authPatch = { displayName: cleanName };
+        if (!cleanPhoto || cleanPhoto.length <= 1800) authPatch.photoURL = cleanPhoto;
+        await updateProfile(auth.currentUser, authPatch);
+      }
+      const profileEntry = {
+        name: cleanName,
+        photoURL: cleanPhoto,
+        title: (title || '').trim(),
+        bio: (bio || '').trim(),
+      };
+      await Promise.all(
+        workspaceIds.map(async (wsId) => {
+          const batch = writeBatch(db);
+          batch.update(ws(wsId), { [`profiles.${user.uid}`]: profileEntry });
+          batch.set(
+            doc(ws(wsId), 'members', user.uid),
+            { displayName: cleanName, photoURL: cleanPhoto, title: profileEntry.title, bio: profileEntry.bio },
+            { merge: true },
+          );
+          await batch.commit();
+        }),
+      );
+      return { displayName: cleanName, photoURL: cleanPhoto };
+    },
 
     subscribeMyWorkspaces(uid, cb) {
       let inner = [];

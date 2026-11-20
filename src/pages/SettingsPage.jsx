@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Copy, Check, LogOut, RotateCcw, Users, Trash2, Link as LinkIcon, Building2, UserPlus, Share2, Languages } from 'lucide-react';
+import { Copy, Check, LogOut, RotateCcw, Users, Trash2, Link as LinkIcon, Building2, UserPlus, Share2, Languages, Camera, User } from 'lucide-react';
 import { backend } from '@/lib/data';
 import { ROLES, roleMeta } from '@/lib/constants';
 import { useAuth } from '@/context/AuthContext';
@@ -39,9 +39,34 @@ const GITHUB_ERRORS = {
   oauth: 'GitHub sign-in was cancelled or failed.',
 };
 
+function resizeAvatarFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read image'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Invalid image file'));
+      img.onload = () => {
+        const size = 160;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const minSide = Math.min(img.width, img.height);
+        const sx = (img.width - minSide) / 2;
+        const sy = (img.height - minSide) / 2;
+        ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export function SettingsPage() {
-  const { user, signOut } = useAuth();
-  const { workspace, workspaceId, role, isOwner, isDeveloper } = useWorkspace();
+  const { user, signOut, updateUserProfile } = useAuth();
+  const { workspaces, workspace, workspaceId, role, isOwner, isDeveloper } = useWorkspace();
   const { lang, setLang, t } = useLanguage();
   const toast = useToast();
   const [params, setParams] = useSearchParams();
@@ -50,6 +75,15 @@ export function SettingsPage() {
   const [inviteRole, setInviteRole] = useState('developer');
   const [savingKey, setSavingKey] = useState(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const fileRef = useRef(null);
+
+  const myProfile = workspace?.profiles?.[user?.uid] || {};
+  const [profile, setProfile] = useState({
+    displayName: myProfile.name || user?.displayName || '',
+    photoURL: myProfile.photoURL || user?.photoURL || '',
+    title: myProfile.title || '',
+    bio: myProfile.bio || '',
+  });
 
   const [biz, setBiz] = useState({
     name: workspace?.name || '',
@@ -118,6 +152,42 @@ export function SettingsPage() {
     }
   };
 
+  const onPickPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await resizeAvatarFile(file);
+      setProfile((p) => ({ ...p, photoURL: dataUrl }));
+    } catch (err) {
+      toast.error(err);
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const saveMyProfile = async (e) => {
+    e.preventDefault();
+    if (!profile.displayName.trim()) return;
+    setSavingKey('my-profile');
+    try {
+      const wsIds = (workspaces || []).map((w) => w.id);
+      await updateUserProfile(
+        {
+          displayName: profile.displayName.trim(),
+          photoURL: profile.photoURL.trim() || null,
+          title: profile.title,
+          bio: profile.bio,
+        },
+        wsIds.length ? wsIds : workspaceId ? [workspaceId] : [],
+      );
+      toast.success(t('settings.profileSaved'));
+    } catch (err) {
+      toast.error(err);
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
   const members = Object.entries(workspace?.members || {});
   const hasOwner = Boolean(workspace?.ownerId) || Object.values(workspace?.members || {}).includes('owner');
   const canInvite = isOwner || isDeveloper;
@@ -128,6 +198,82 @@ export function SettingsPage() {
       <PageHeader title={t('settings.title')} subtitle={workspace?.name} />
 
       <DeletionRequestBanner />
+
+      <Section title={t('settings.profile')} description={t('settings.profileDesc')}>
+        <form onSubmit={saveMyProfile} className="space-y-3.5">
+          <div className="flex items-center gap-4">
+            <Avatar name={profile.displayName || user?.displayName} src={profile.photoURL || null} size="lg" />
+            <div className="flex flex-wrap items-center gap-2">
+              <input ref={fileRef} type="file" accept="image/*" onChange={onPickPhoto} className="hidden" />
+              <Button type="button" size="sm" variant="secondary" icon={Camera} onClick={() => fileRef.current?.click()}>
+                {t('settings.uploadPhoto')}
+              </Button>
+              {profile.photoURL && (
+                <Button type="button" size="sm" variant="ghost" onClick={() => setProfile((p) => ({ ...p, photoURL: '' }))}>
+                  {t('settings.removePhoto')}
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <label className="block">
+            <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-ink-600">
+              <User className="h-3.5 w-3.5" /> {t('settings.displayName')}
+            </span>
+            <input
+              required
+              maxLength={80}
+              value={profile.displayName}
+              onChange={(e) => setProfile((p) => ({ ...p, displayName: e.target.value }))}
+              placeholder={t('settings.displayNamePlaceholder')}
+              className={inputCls}
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-ink-600">{t('settings.photoUrl')}</span>
+            <input
+              value={profile.photoURL.startsWith('data:') ? '' : profile.photoURL}
+              onChange={(e) => setProfile((p) => ({ ...p, photoURL: e.target.value }))}
+              placeholder="https://..."
+              className={inputCls}
+            />
+          </label>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-ink-600">{t('settings.jobTitle')}</span>
+              <input
+                maxLength={80}
+                value={profile.title}
+                onChange={(e) => setProfile((p) => ({ ...p, title: e.target.value }))}
+                placeholder={t('settings.jobTitlePlaceholder')}
+                className={inputCls}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-ink-600">{t('settings.bio')}</span>
+              <input
+                maxLength={140}
+                value={profile.bio}
+                onChange={(e) => setProfile((p) => ({ ...p, bio: e.target.value }))}
+                placeholder={t('settings.bioPlaceholder')}
+                className={inputCls}
+              />
+            </label>
+          </div>
+
+          {user?.email && (
+            <p className="text-xs text-ink-400">
+              {t('settings.email')}: <span className="font-medium text-ink-600">{user.email}</span>
+            </p>
+          )}
+
+          <Button type="submit" size="sm" loading={savingKey === 'my-profile'} disabled={!profile.displayName.trim()}>
+            {t('settings.saveMyProfile')}
+          </Button>
+        </form>
+      </Section>
 
       <Section title={t('settings.language')} description={t('settings.languageDesc')}>
         <div className="flex items-center justify-between gap-3">
@@ -151,40 +297,9 @@ export function SettingsPage() {
       </Section>
 
       {isDeveloper && (
-        <Section title={t('settings.github')} description={t('settings.githubDesc')}>
-          <GitHubConnection />
-        </Section>
-      )}
-
-      {isOwner && (
         <>
-          <Section title={t('settings.businessProfile')} description={t('settings.businessProfileDesc')}>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (biz.name.trim().length < 2) return;
-                savePatch(
-                  'biz',
-                  { name: biz.name.trim(), businessProfile: { tagline: biz.tagline.trim(), industry: biz.industry.trim() } },
-                  'Business profile saved',
-                );
-              }}
-              className="space-y-3"
-            >
-              <label className="block">
-                <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-ink-600">
-                  <Building2 className="h-3.5 w-3.5" /> {t('settings.bizNameLabel')}
-                </span>
-                <input value={biz.name} onChange={(e) => setBiz((b) => ({ ...b, name: e.target.value }))} maxLength={60} className={inputCls} />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-xs font-medium text-ink-600">{t('settings.taglineLabel')}</span>
-                <input value={biz.tagline} onChange={(e) => setBiz((b) => ({ ...b, tagline: e.target.value }))} maxLength={100} placeholder={t('settings.taglinePlaceholder')} className={inputCls} />
-              </label>
-              <Button type="submit" size="sm" loading={savingKey === 'biz'} disabled={biz.name.trim().length < 2}>
-                {t('settings.saveProfile')}
-              </Button>
-            </form>
+          <Section title={t('settings.github')} description={t('settings.githubDesc')}>
+            <GitHubConnection />
           </Section>
 
           <Section title={t('settings.links')} description={t('settings.linksDesc')}>
@@ -215,6 +330,37 @@ export function SettingsPage() {
             </form>
           </Section>
         </>
+      )}
+
+      {isOwner && (
+        <Section title={t('settings.businessProfile')} description={t('settings.businessProfileDesc')}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (biz.name.trim().length < 2) return;
+              savePatch(
+                'biz',
+                { name: biz.name.trim(), businessProfile: { tagline: biz.tagline.trim(), industry: biz.industry.trim() } },
+                'Business profile saved',
+              );
+            }}
+            className="space-y-3"
+          >
+            <label className="block">
+              <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-ink-600">
+                <Building2 className="h-3.5 w-3.5" /> {t('settings.bizNameLabel')}
+              </span>
+              <input value={biz.name} onChange={(e) => setBiz((b) => ({ ...b, name: e.target.value }))} maxLength={60} className={inputCls} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-ink-600">{t('settings.taglineLabel')}</span>
+              <input value={biz.tagline} onChange={(e) => setBiz((b) => ({ ...b, tagline: e.target.value }))} maxLength={100} placeholder={t('settings.taglinePlaceholder')} className={inputCls} />
+            </label>
+            <Button type="submit" size="sm" loading={savingKey === 'biz'} disabled={biz.name.trim().length < 2}>
+              {t('settings.saveProfile')}
+            </Button>
+          </form>
+        </Section>
       )}
 
       <Section
@@ -289,7 +435,10 @@ export function SettingsPage() {
                   <p className="truncate text-sm font-medium text-ink-900">
                     {profile.name || 'Member'} {isSelf && <span className="text-ink-400">{t('settings.you')}</span>}
                   </p>
-                  <Badge tone={meta.tone}>{t(`role.${memberRole}`)}</Badge>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Badge tone={meta.tone}>{t(`role.${memberRole}`)}</Badge>
+                    {profile.title && <span className="truncate text-xs text-ink-400">· {profile.title}</span>}
+                  </div>
                 </div>
                 {isOwner && !isSelf && (
                   <div className="flex items-center gap-1.5">

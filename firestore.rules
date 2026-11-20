@@ -85,13 +85,16 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
 
       allow update: if signedIn() && request.auth.uid in resource.data.members && (
-        // owner can update business metadata, links, and deletion request resolution
+        // owner can update business metadata and deletion request resolution
         (resource.data.members[request.auth.uid] == 'owner'
-          && onlyChanges(['name', 'businessProfile', 'workspaceLinks', 'deletionRequest'])
+          && onlyChanges(['name', 'businessProfile', 'deletionRequest'])
           && isStr(request.resource.data.name, 2, 60))
-        // developer can submit/clear a deletion request when an owner exists
+        // developer can manage live/preview links and submit/clear a deletion request
         || (resource.data.members[request.auth.uid] == 'developer'
-          && onlyChanges(['deletionRequest']))
+          && onlyChanges(['workspaceLinks', 'deletionRequest']))
+        // any member can update only their own entry in profiles
+        || (onlyChanges(['profiles'])
+          && request.resource.data.profiles.diff(resource.data.profiles).affectedKeys().hasOnly([request.auth.uid]))
         // any member can allocate the next ticket number (inside the createTicket transaction)
         || (onlyChanges(['ticketCounter']) && request.resource.data.ticketCounter == resource.data.ticketCounter + 1)
       );
@@ -107,10 +110,13 @@ service cloud.firestore {
           && request.auth.uid == memberUid
           && request.auth.uid in getAfter(/databases/$(database)/documents/workspaces/$(wsId)).data.members
           && request.resource.data.role == getAfter(/databases/$(database)/documents/workspaces/$(wsId)).data.members[request.auth.uid];
-        allow update: if isMember(wsId)
-          && roleIn(wsId) == 'owner'
-          && memberUid != request.auth.uid
-          && request.resource.data.role in ['owner', 'team_member', 'developer'];
+        allow update: if isMember(wsId) && (
+          (roleIn(wsId) == 'owner'
+            && memberUid != request.auth.uid
+            && request.resource.data.role in ['owner', 'team_member', 'developer'])
+          || (request.auth.uid == memberUid
+            && onlyChanges(['displayName', 'photoURL', 'title', 'bio']))
+        );
         allow delete: if isMember(wsId)
           && roleIn(wsId) == 'owner'
           && memberUid != request.auth.uid;

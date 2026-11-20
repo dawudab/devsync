@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { backend } from '@/lib/data';
 
 const AuthContext = createContext(null);
@@ -8,6 +8,15 @@ export function AuthProvider({ children }) {
 
   useEffect(() => backend.onAuthChange(setUser), []);
 
+  const updateUserProfile = useCallback(
+    async (profile, workspaceIds = []) => {
+      if (!user) return;
+      const updated = await backend.updateUserProfile(user, profile, workspaceIds);
+      if (updated) setUser((prev) => (prev ? { ...prev, ...updated } : prev));
+    },
+    [user],
+  );
+
   const value = useMemo(
     () => ({
       user: user ?? null,
@@ -15,8 +24,9 @@ export function AuthProvider({ children }) {
       signInWithGoogle: backend.signInWithGoogle,
       signInAsGuest: backend.signInAsGuest,
       signOut: backend.signOut,
+      updateUserProfile,
     }),
-    [user],
+    [user, updateUserProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
