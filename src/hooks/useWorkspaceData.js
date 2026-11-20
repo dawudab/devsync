@@ -29,12 +29,6 @@ export function useMilestones() {
   return { milestones: data || [], loading };
 }
 
-export function useBudgetLogs() {
-  const { workspaceId } = useWorkspace();
-  const { data, loading } = useSubscription(workspaceId ? (cb) => backend.subscribeBudgetLogs(workspaceId, cb) : null, [workspaceId]);
-  return { logs: data || [], loading };
-}
-
 export function useWeeklyDigests() {
   const { workspaceId } = useWorkspace();
   const { data, loading } = useSubscription(workspaceId ? (cb) => backend.subscribeWeeklyDigests(workspaceId, cb) : null, [workspaceId]);

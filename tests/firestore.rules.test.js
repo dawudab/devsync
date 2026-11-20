@@ -46,7 +46,6 @@ beforeEach(async () => {
       await setDoc(doc(db, `workspaces/${w}/updates/u1`), { summary: { headline: 'x' }, reactions: {}, commentCount: 0, approvalStatus: 'pending' });
       await setDoc(doc(db, `workspaces/${w}/tickets/t1`), { number: 1, title: 't', kind: 'change_request', status: 'todo', activity: [{ type: 'created' }] });
       await setDoc(doc(db, `workspaces/${w}/milestones/m1`), { title: 'Phase 1', progress: 0, status: 'planned', order: 0 });
-      await setDoc(doc(db, `workspaces/${w}/budgetLogs/b1`), { hours: 2, description: 'Work', loggedBy: { uid: DEV_A, name: 'Dev' } });
       await setDoc(doc(db, `workspaces/${w}/webhookLogs/l1`), { event: 'push' });
     }
     await setDoc(doc(db, 'installations/123'), { workspaceId: 'A' });
@@ -62,7 +61,6 @@ describe('tenant isolation', () => {
     await assertSucceeds(getDocs(collection(db, 'workspaces/A/updates')));
     await assertSucceeds(getDocs(collection(db, 'workspaces/A/tickets')));
     await assertSucceeds(getDocs(collection(db, 'workspaces/A/milestones')));
-    await assertSucceeds(getDocs(collection(db, 'workspaces/A/budgetLogs')));
     // webhookLogs are strictly developer-only
     await assertFails(getDocs(collection(db, 'workspaces/A/webhookLogs')));
     await assertFails(getDocs(collection(as(TEAM_A), 'workspaces/A/webhookLogs')));
@@ -136,7 +134,18 @@ describe('workspace documents & invites', () => {
     await assertSucceeds(setDoc(doc(as(OWNER_A), 'invites/AB12CD'), base));
     await assertFails(setDoc(doc(as(TEAM_A), 'invites/TM1234'), { ...base, code: 'TM1234', createdBy: TEAM_A }));
     await assertFails(setDoc(doc(as(DEV_A), 'invites/DV1234'), { ...base, code: 'DV1234', role: 'developer', createdBy: DEV_A }));
+    await assertSucceeds(setDoc(doc(as(DEV_A), 'invites/TM5678'), { ...base, code: 'TM5678', role: 'team_member', createdBy: DEV_A }));
     await assertSucceeds(setDoc(doc(as(DEV_A), 'invites/OW1234'), { ...base, code: 'OW1234', role: 'owner', createdBy: DEV_A }));
+  });
+
+  test('project deletion is owner-gated once an owner exists', async () => {
+    // DEV_A cannot directly delete workspace A because OWNER_A exists
+    await assertFails(deleteDoc(doc(as(DEV_A), 'workspaces/A')));
+    // DEV_A can submit a deletionRequest
+    await assertSucceeds(updateDoc(doc(as(DEV_A), 'workspaces/A'), { deletionRequest: { status: 'pending', requestedBy: { uid: DEV_A, name: 'Dev' }, reason: 'cleanup' } }));
+    // OWNER_A can reject or delete
+    await assertSucceeds(updateDoc(doc(as(OWNER_A), 'workspaces/A'), { deletionRequest: { status: 'rejected' } }));
+    await assertSucceeds(deleteDoc(doc(as(OWNER_A), 'workspaces/A')));
   });
 });
 
@@ -169,7 +178,7 @@ describe('feed updates & approvals & comments', () => {
   });
 });
 
-describe('tickets, milestones, and budget logs', () => {
+describe('tickets and milestones', () => {
   test('createTicket transaction allocates the next number and enforces kind per role', async () => {
     const db = as(OWNER_A);
     await assertSucceeds(
@@ -237,13 +246,6 @@ describe('tickets, milestones, and budget logs', () => {
     await assertFails(updateDoc(doc(as(DEV_A), 'workspaces/A/milestones/m1'), { title: 'Hijacked', updatedAt: serverTimestamp() }));
     await assertFails(deleteDoc(doc(as(DEV_A), 'workspaces/A/milestones/m1')));
     await assertSucceeds(deleteDoc(doc(as(OWNER_A), 'workspaces/A/milestones/m1')));
-  });
-
-  test('budgetLogs: developer logs hours, owner can delete', async () => {
-    await assertSucceeds(setDoc(doc(as(DEV_A), 'workspaces/A/budgetLogs/b2'), { hours: 3, description: 'Bugfix', loggedBy: { uid: DEV_A, name: 'Dev' } }));
-    await assertFails(setDoc(doc(as(OWNER_A), 'workspaces/A/budgetLogs/b3'), { hours: 3, description: 'Fake', loggedBy: { uid: OWNER_A, name: 'Owner' } }));
-    await assertFails(deleteDoc(doc(as(DEV_A), 'workspaces/A/budgetLogs/b1')));
-    await assertSucceeds(deleteDoc(doc(as(OWNER_A), 'workspaces/A/budgetLogs/b1')));
   });
 });
 

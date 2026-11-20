@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Building2, Code2, KeyRound, Copy, Check, ArrowRight } from 'lucide-react';
+import { ArrowLeft, Building2, Code2, KeyRound, Copy, Check, ArrowRight, Share2 } from 'lucide-react';
 import { backend } from '@/lib/data';
 import { useAuth } from '@/context/AuthContext';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { useToast } from '@/context/ToastContext';
 import { Button } from '@/components/ui/Button';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
-import { cn } from '@/lib/utils';
+import { cn, formatInviteMessage, shareInvite } from '@/lib/utils';
 
 const inputCls =
   'h-12 w-full rounded-xl border-0 bg-ink-50 px-4 text-[15px] text-ink-900 ring-1 ring-inset ring-ink-200 placeholder:text-ink-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500';
@@ -42,7 +42,7 @@ export function OnboardingPage() {
         const targetRole = creatorRole === 'developer' ? 'owner' : 'developer';
         const inviteCode = await backend.createInvite(wsId, name.trim(), targetRole, user.uid);
         switchWorkspace(wsId);
-        setCreatedInfo({ wsId, inviteCode, targetRole, creatorRole });
+        setCreatedInfo({ wsId, businessName: name.trim(), inviteCode, targetRole, creatorRole });
         toast.success('Workspace created');
       } else {
         const wsId = await backend.joinWorkspace(code);
@@ -65,8 +65,24 @@ export function OnboardingPage() {
   };
 
   if (createdInfo) {
-    const inviteUrl = `${window.location.origin}/onboarding?invite=${createdInfo.inviteCode}`;
+    const shareMsg = formatInviteMessage({
+      inviterName: user?.displayName,
+      role: createdInfo.targetRole,
+      businessName: createdInfo.businessName,
+      inviteCode: createdInfo.inviteCode,
+    });
     const isDevCreator = createdInfo.creatorRole === 'developer';
+    const handleShare = async () => {
+      const res = await shareInvite({
+        inviterName: user?.displayName,
+        role: createdInfo.targetRole,
+        businessName: createdInfo.businessName,
+        inviteCode: createdInfo.inviteCode,
+      });
+      if (res === 'copied') toast.success('Invite message copied to clipboard');
+      else if (res === 'shared') toast.success('Invite shared');
+    };
+
     return (
       <div className="mx-auto flex min-h-dvh max-w-md flex-col px-5 pb-8 pt-[calc(env(safe-area-inset-top)+2rem)]">
         <img src="/favicon.svg" alt="DevSync" className="h-10 w-10 rounded-xl" />
@@ -75,15 +91,15 @@ export function OnboardingPage() {
         </h1>
         <p className="mt-1.5 text-sm text-ink-500">
           {isDevCreator
-            ? 'Send this one-time Owner invite code or link to your client so they can claim admin access, set their budget, and review updates.'
-            : 'Send this Developer invite code or link to your developer so they can connect GitHub and ship updates.'}
+            ? 'Send this one-time Owner invite to your boss so they can claim admin access, add live links, and review updates.'
+            : 'Send this Developer invite to your developer so they can connect GitHub and ship updates.'}
         </p>
 
-        <div className="mt-6 rounded-3xl bg-white p-5 shadow-card ring-1 ring-ink-100">
+        <div className="mt-6 space-y-3 rounded-3xl bg-white p-5 shadow-card ring-1 ring-ink-100">
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">
             {createdInfo.targetRole === 'owner' ? 'Owner Invite Code' : 'Developer Invite Code'}
           </p>
-          <div className="mt-2 flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <code className="flex h-12 flex-1 items-center justify-center rounded-xl bg-ink-50 font-mono text-2xl font-bold tracking-[0.25em] text-ink-900 ring-1 ring-inset ring-ink-200">
               {createdInfo.inviteCode}
             </code>
@@ -91,12 +107,15 @@ export function OnboardingPage() {
               {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
             </Button>
           </div>
-          <button
-            onClick={() => copyInvite(inviteUrl)}
-            className="mt-3 w-full rounded-xl bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 transition hover:bg-brand-100"
-          >
-            Copy direct invite link
-          </button>
+          <p className="rounded-2xl bg-ink-50 p-3 text-xs leading-relaxed text-ink-600 ring-1 ring-inset ring-ink-100">{shareMsg}</p>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="secondary" size="sm" icon={Copy} onClick={() => copyInvite(shareMsg)}>
+              Copy Invite Message
+            </Button>
+            <Button variant="primary" size="sm" icon={Share2} onClick={handleShare}>
+              Share Invite
+            </Button>
+          </div>
         </div>
 
         <div className="mt-auto space-y-2.5 pt-8">

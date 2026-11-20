@@ -125,7 +125,7 @@ export function createFirestoreBackend() {
         github: null,
         businessProfile: extras.businessProfile || { tagline: '', industry: '' },
         workspaceLinks: extras.workspaceLinks || { productionUrl: '', stagingUrl: '', designUrl: '' },
-        budget: extras.budget || { hourlyRate: 120, monthlyBudget: 4800, currency: 'USD' },
+        deletionRequest: null,
         createdAt: serverTimestamp(),
       });
       batch.set(doc(ws(ref.id), 'members', user.uid), {
@@ -143,8 +143,28 @@ export function createFirestoreBackend() {
       await updateDoc(ws(wsId), patch);
     },
 
-    async deleteWorkspace(wsId) {
+    async deleteWorkspace(wsId, uid) {
       await deleteDoc(ws(wsId));
+      if (uid) {
+        await updateDoc(doc(db, 'users', uid), { workspaceIds: arrayRemove(wsId) }).catch(() => {});
+      }
+    },
+
+    async requestWorkspaceDeletion(wsId, reason, actor) {
+      await updateDoc(ws(wsId), {
+        deletionRequest: {
+          status: 'pending',
+          requestedBy: { uid: actor.uid, name: actor.displayName },
+          requestedAt: Date.now(),
+          reason: (reason || '').trim(),
+        },
+      });
+    },
+
+    async resolveDeletionRequest(wsId, status) {
+      await updateDoc(ws(wsId), {
+        deletionRequest: status === 'clear' ? null : { status, resolvedAt: Date.now() },
+      });
     },
 
     async joinWorkspace(code) {
@@ -281,27 +301,6 @@ export function createFirestoreBackend() {
 
     async deleteMilestone(wsId, milestoneId) {
       await deleteDoc(doc(ws(wsId), 'milestones', milestoneId));
-    },
-
-    subscribeBudgetLogs(wsId, cb) {
-      return listen(query(collection(ws(wsId), 'budgetLogs'), orderBy('loggedAt', 'desc')), cb);
-    },
-
-    async logBudgetHours(wsId, { hours, description, ticketId = null, updateId = null }, author) {
-      const ref = doc(collection(ws(wsId), 'budgetLogs'));
-      await setDoc(ref, {
-        hours: Number(hours),
-        description: description.trim(),
-        ticketId: ticketId || null,
-        updateId: updateId || null,
-        loggedBy: { uid: author.uid, name: author.displayName },
-        loggedAt: serverTimestamp(),
-      });
-      return ref.id;
-    },
-
-    async deleteBudgetLog(wsId, logId) {
-      await deleteDoc(doc(ws(wsId), 'budgetLogs', logId));
     },
 
     subscribeWeeklyDigests(wsId, cb) {

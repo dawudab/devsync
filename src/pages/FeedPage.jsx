@@ -5,12 +5,12 @@ import { Github } from '@/components/ui/GithubIcon';
 import { useNow } from '@/hooks/useNow';
 import { useAuth } from '@/context/AuthContext';
 import { useWorkspace } from '@/context/WorkspaceContext';
-import { useFeed, useTickets, useMilestones, useBudgetLogs, useWeeklyDigests } from '@/hooks/useWorkspaceData';
+import { useFeed, useTickets, useMilestones, useWeeklyDigests } from '@/hooks/useWorkspaceData';
 import { FeedCard } from '@/components/feed/FeedCard';
 import { DevStats } from '@/components/feed/DevStats';
 import { ExecutiveDigestCard } from '@/components/feed/ExecutiveDigestCard';
 import { LiveLinksBar } from '@/components/feed/LiveLinksBar';
-import { BudgetTrackerCard } from '@/components/feed/BudgetTrackerCard';
+import { DeletionRequestBanner } from '@/components/settings/DeleteProjectSheet';
 import { SimulateEventButton } from '@/components/dev/SimulateEventButton';
 import { CardSkeleton, EmptyState } from '@/components/ui/Feedback';
 import { Button } from '@/components/ui/Button';
@@ -71,7 +71,6 @@ export function FeedPage() {
   const { updates, loading } = useFeed();
   const { tickets } = useTickets();
   const { milestones } = useMilestones();
-  const { logs: budgetLogs } = useBudgetLogs();
   const { digests } = useWeeklyDigests();
   const [filter, setFilter] = useState('all');
   const { hash } = useLocation();
@@ -97,15 +96,14 @@ export function FeedPage() {
         <PageHeader title={greeting(user?.displayName)} subtitle={workspace?.businessProfile?.tagline || 'Executive overview & recent product updates.'} />
       )}
 
+      <DeletionRequestBanner />
+
       {!isDeveloper && (
         <>
           <ExecutiveDigestCard updates={updates} milestones={milestones} digests={digests} />
           <LiveLinksBar />
-          <BudgetTrackerCard logs={budgetLogs} />
         </>
       )}
-
-      {isDeveloper && <BudgetTrackerCard logs={budgetLogs} />}
 
       {!repo && isDeveloper && (
         <EmptyState

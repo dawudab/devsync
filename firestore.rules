@@ -61,7 +61,7 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && (
           roleIn(request.resource.data.workspaceId) == 'owner'
-          || (roleIn(request.resource.data.workspaceId) == 'developer' && request.resource.data.role == 'owner')
+          || (roleIn(request.resource.data.workspaceId) == 'developer' && request.resource.data.role in ['owner', 'team_member'])
         );
       allow delete: if isMember(resource.data.workspaceId)
         && (roleIn(resource.data.workspaceId) == 'owner' || resource.data.createdBy == request.auth.uid);
@@ -74,7 +74,7 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
           'name', 'ownerId', 'members', 'profiles', 'inviteCode', 'ticketCounter',
-          'github', 'businessProfile', 'workspaceLinks', 'budget', 'createdAt'
+          'github', 'businessProfile', 'workspaceLinks', 'deletionRequest', 'createdAt'
         ])
         && request.resource.data.members.keys().hasOnly([request.auth.uid])
         && request.resource.data.profiles.keys().hasOnly([request.auth.uid])
@@ -88,15 +88,21 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
 
       allow update: if signedIn() && request.auth.uid in resource.data.members && (
-        // owner can update business metadata, links, and budget
+        // owner can update business metadata, links, and deletion request resolution
         (resource.data.members[request.auth.uid] == 'owner'
-          && onlyChanges(['name', 'businessProfile', 'workspaceLinks', 'budget'])
+          && onlyChanges(['name', 'businessProfile', 'workspaceLinks', 'deletionRequest'])
           && isStr(request.resource.data.name, 2, 60))
+        // developer can submit/clear a deletion request when an owner exists
+        || (resource.data.members[request.auth.uid] == 'developer'
+          && onlyChanges(['deletionRequest']))
         // any member can allocate the next ticket number (inside the createTicket transaction)
         || (onlyChanges(['ticketCounter']) && request.resource.data.ticketCounter == resource.data.ticketCounter + 1)
       );
 
-      allow delete: if signedIn() && resource.data.members[request.auth.uid] == 'owner';
+      allow delete: if signedIn() && (
+        resource.data.members[request.auth.uid] == 'owner'
+        || (resource.data.members[request.auth.uid] == 'developer' && resource.data.ownerId == null)
+      );
 
       match /members/{memberUid} {
         allow read: if isMember(wsId);
@@ -182,18 +188,6 @@ service cloud.firestore {
             && request.resource.data.progress <= 100
             && request.resource.data.status in ['planned', 'in_progress', 'completed'])
         );
-      }
-
-      match /budgetLogs/{logId} {
-        allow read: if isMember(wsId);
-        allow create: if isMember(wsId)
-          && roleIn(wsId) == 'developer'
-          && request.resource.data.loggedBy.uid == request.auth.uid
-          && request.resource.data.hours is number
-          && request.resource.data.hours > 0
-          && request.resource.data.hours <= 100
-          && isStr(request.resource.data.description, 1, 300);
-        allow update, delete: if isMember(wsId) && roleIn(wsId) == 'owner';
       }
 
       match /weeklyDigests/{digestId} {

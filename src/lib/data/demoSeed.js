@@ -13,7 +13,7 @@ const MIN = 60_000;
 const HOUR = 60 * MIN;
 const DAY = 24 * HOUR;
 
-function workspaceDoc({ name, inviteCode, repo, links, budget, businessProfile, now }) {
+function workspaceDoc({ name, inviteCode, repo, links, businessProfile, now }) {
   return {
     name,
     ownerId: DEMO_PERSONAS.owner.uid,
@@ -30,7 +30,7 @@ function workspaceDoc({ name, inviteCode, repo, links, budget, businessProfile, 
     inviteCode,
     businessProfile: businessProfile || { tagline: '', industry: '' },
     workspaceLinks: links || { productionUrl: '', stagingUrl: '', designUrl: '' },
-    budget: budget || { hourlyRate: 120, monthlyBudget: 4800, currency: 'USD' },
+    deletionRequest: null,
     ticketCounter: 0,
     createdAt: now - 30 * DAY,
     github: {
@@ -127,7 +127,6 @@ export function buildDemoSeed() {
       stagingUrl: 'https://staging.acmecoffee.example.com',
       designUrl: 'https://figma.com/file/acme-storefront',
     },
-    budget: { hourlyRate: 125, monthlyBudget: 5000, currency: 'USD' },
     now,
   });
 
@@ -195,7 +194,7 @@ export function buildDemoSeed() {
   };
 
   // Tickets for Acme Coffee Co.
-  const t1 = ticket(docs, 'demo-acme', {
+  ticket(docs, 'demo-acme', {
     title: 'Add a gift card option at checkout',
     description: 'Customers keep asking if they can buy gift cards for the holidays. Ideally $25, $50 and $100 options.',
     priority: 'high',
@@ -245,32 +244,6 @@ export function buildDemoSeed() {
     createdAt: now - 50 * MIN,
   });
 
-  // Budget logs for Acme Coffee Co.
-  docs[`workspaces/demo-acme/budgetLogs/${generateId()}`] = {
-    hours: 8.5,
-    description: 'Fixed session timeout bug & deployed checkout reliability patch',
-    ticketId: t1,
-    updateId: latest.id,
-    loggedBy: { uid: developer.uid, name: developer.displayName },
-    loggedAt: now - 1 * DAY,
-  };
-  docs[`workspaces/demo-acme/budgetLogs/${generateId()}`] = {
-    hours: 14,
-    description: 'Apple Pay & gift card cart flow implementation',
-    ticketId: t1,
-    updateId: wallet.id,
-    loggedBy: { uid: developer.uid, name: developer.displayName },
-    loggedAt: now - 3 * DAY,
-  };
-  docs[`workspaces/demo-acme/budgetLogs/${generateId()}`] = {
-    hours: 6,
-    description: 'Homepage image compression & mobile performance tuning',
-    ticketId: null,
-    updateId: acme[0].id,
-    loggedBy: { uid: developer.uid, name: developer.displayName },
-    loggedAt: now - 5 * DAY,
-  };
-
   // Weekly digest for Acme Coffee Co.
   docs[`workspaces/demo-acme/weeklyDigests/${generateId()}`] = {
     headline: 'Strong week — checkout fixes shipped and Gift Cards hit 65%',
@@ -302,7 +275,6 @@ export function buildDemoSeed() {
       stagingUrl: 'https://preview.bloomandpetal.example.com',
       designUrl: '',
     },
-    budget: { hourlyRate: 110, monthlyBudget: 3300, currency: 'USD' },
     now,
   });
   seedUpdates(docs, 'demo-bloom', bloomRepo, [[6, 8 * HOUR, 'approved'], [4, 3 * HOUR, 'pending']], now);
@@ -327,15 +299,6 @@ export function buildDemoSeed() {
     status: 'todo',
     createdAt: now - 4 * HOUR,
   });
-  docs[`workspaces/demo-bloom/budgetLogs/${generateId()}`] = {
-    hours: 7.5,
-    description: 'Delivery slot calendar UI and availability rules',
-    ticketId: null,
-    updateId: null,
-    loggedBy: { uid: developer.uid, name: developer.displayName },
-    loggedAt: now - 6 * HOUR,
-  };
-
   docs[`users/${owner.uid}`] = { workspaceIds: ['demo-acme', 'demo-bloom'] };
   docs[`users/${team.uid}`] = { workspaceIds: ['demo-acme', 'demo-bloom'] };
   docs[`users/${developer.uid}`] = { workspaceIds: ['demo-acme', 'demo-bloom'] };

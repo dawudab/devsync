@@ -88,7 +88,7 @@ export function createLocalBackend() {
         inviteCode: generateInviteCode(),
         businessProfile: extras.businessProfile || { tagline: '', industry: '' },
         workspaceLinks: extras.workspaceLinks || { productionUrl: '', stagingUrl: '', designUrl: '' },
-        budget: extras.budget || { hourlyRate: 120, monthlyBudget: 4800, currency: 'USD' },
+        deletionRequest: null,
         ticketCounter: 0,
         github: null,
         createdAt: Date.now(),
@@ -104,12 +104,35 @@ export function createLocalBackend() {
     },
 
     async deleteWorkspace(wsId) {
-      const { ws } = assertMember(wsId, ['owner']);
+      const { ws, role } = assertMember(wsId, ['owner', 'developer']);
+      const hasOwner = Boolean(ws.ownerId) || Object.values(ws.members || {}).includes('owner');
+      if (role === 'developer' && hasOwner) {
+        throw new Error('Owner approval is required to delete this project');
+      }
       for (const uid of Object.keys(ws.members || {})) {
         const ids = store.get(`users/${uid}`)?.workspaceIds || [];
         store.set(`users/${uid}`, { workspaceIds: ids.filter((i) => i !== wsId) });
       }
       store.remove(wsPath(wsId));
+    },
+
+    async requestWorkspaceDeletion(wsId, reason, actor) {
+      assertMember(wsId, ['developer']);
+      store.update(wsPath(wsId), {
+        deletionRequest: {
+          status: 'pending',
+          requestedBy: { uid: actor.uid, name: actor.displayName },
+          requestedAt: Date.now(),
+          reason: (reason || '').trim(),
+        },
+      });
+    },
+
+    async resolveDeletionRequest(wsId, status) {
+      assertMember(wsId, ['owner', 'developer']);
+      store.update(wsPath(wsId), {
+        deletionRequest: status === 'clear' ? null : { status, resolvedAt: Date.now() },
+      });
     },
 
     async joinWorkspace(code) {
@@ -161,8 +184,8 @@ export function createLocalBackend() {
 
     async createInvite(wsId, workspaceName, role, creatorUid) {
       const { role: callerRole } = assertMember(wsId, ['owner', 'developer']);
-      if (callerRole === 'developer' && role !== 'owner') {
-        throw new Error('Developers can only generate an Owner invite');
+      if (callerRole === 'developer' && !['owner', 'team_member'].includes(role)) {
+        throw new Error('Developers can only generate Owner or Team Member invites');
       }
       const code = generateShortInviteCode();
       store.set(`invites/${code}`, {
@@ -331,29 +354,6 @@ export function createLocalBackend() {
     async deleteMilestone(wsId, milestoneId) {
       assertMember(wsId, ['owner']);
       store.remove(`${wsPath(wsId)}/milestones/${milestoneId}`);
-    },
-
-    subscribeBudgetLogs(wsId, cb) {
-      return store.watch(() => store.list(`${wsPath(wsId)}/budgetLogs`).sort(byDesc('loggedAt')), cb);
-    },
-
-    async logBudgetHours(wsId, { hours, description, ticketId = null, updateId = null }, author) {
-      assertMember(wsId, ['developer']);
-      const id = generateId();
-      store.set(`${wsPath(wsId)}/budgetLogs/${id}`, {
-        hours: Number(hours),
-        description: description.trim(),
-        ticketId: ticketId || null,
-        updateId: updateId || null,
-        loggedBy: { uid: author.uid, name: author.displayName },
-        loggedAt: Date.now(),
-      });
-      return id;
-    },
-
-    async deleteBudgetLog(wsId, logId) {
-      assertMember(wsId, ['owner']);
-      store.remove(`${wsPath(wsId)}/budgetLogs/${logId}`);
     },
 
     subscribeWeeklyDigests(wsId, cb) {

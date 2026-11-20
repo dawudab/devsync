@@ -23,8 +23,9 @@ function AppRoutes() {
   if (!user) return <SignInPage />;
   if (workspaces === null) return <FullScreenLoader label="Loading your workspaces…" />;
   if (workspaces.length === 0) return <OnboardingPage />;
-  if (inviteParam && location.pathname !== '/onboarding') {
-    return <Navigate to={`/onboarding?invite=${encodeURIComponent(inviteParam)}`} replace />;
+  if ((inviteParam && location.pathname !== '/onboarding') || location.pathname === '/join') {
+    const target = inviteParam ? `/onboarding?invite=${encodeURIComponent(inviteParam)}` : '/onboarding';
+    return <Navigate to={target} replace />;
   }
   if (loading) return <FullScreenLoader label="Opening workspace…" />;
   if (!workspace) return <FullScreenLoader label="You no longer have access to this workspace." />;
