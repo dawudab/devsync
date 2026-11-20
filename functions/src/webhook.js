@@ -4,18 +4,20 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { db } from './admin.js';
 import { normalizeGithubEvent } from './shared/github-events.js';
 import { createGitHubApp, verifyWebhookSignature } from './github.js';
+import { filterAvailableRepos } from './repoLock.js';
 import { GITHUB_APP_ID, GITHUB_PRIVATE_KEY, GITHUB_WEBHOOK_SECRET } from './config.js';
 
 async function refreshRepos(workspaceId, installationId) {
   const github = createGitHubApp({ appId: GITHUB_APP_ID.value(), privateKey: GITHUB_PRIVATE_KEY.value() });
-  const repos = await github.listInstallationRepos(installationId);
+  const allRepos = await github.listInstallationRepos(installationId);
+  const availableRepos = await filterAvailableRepos(allRepos, workspaceId);
   const wsRef = db.doc(`workspaces/${workspaceId}`);
   await db.runTransaction(async (tx) => {
     const gh = (await tx.get(wsRef)).data()?.github;
     if (!gh || String(gh.installationId) !== String(installationId)) return;
-    const selectedRepo = repos.find((r) => r.id === gh.selectedRepo?.id) || null;
+    const selectedRepo = availableRepos.find((r) => String(r.id) === String(gh.selectedRepo?.id)) || null;
     tx.update(wsRef, {
-      'github.repos': repos,
+      'github.repos': selectedRepo ? [selectedRepo] : availableRepos,
       'github.selectedRepo': selectedRepo,
       'github.status': selectedRepo ? gh.status : 'pending_selection',
     });
@@ -26,7 +28,14 @@ async function handleInstallationLifecycle(event, payload, workspaceId, installa
   const wsRef = db.doc(`workspaces/${workspaceId}`);
   if (event === 'installation') {
     if (payload.action === 'deleted') {
-      await db.batch().delete(db.doc(`installations/${installationId}`)).update(wsRef, { 'github.status': 'removed', 'github.selectedRepo': null }).commit();
+      const ws = (await wsRef.get()).data();
+      const batch = db.batch();
+      batch.delete(db.doc(`installations/${installationId}`));
+      if (ws?.github?.selectedRepo?.id) {
+        batch.delete(db.doc(`repoLinks/${ws.github.selectedRepo.id}`));
+      }
+      batch.update(wsRef, { 'github.status': 'removed', 'github.selectedRepo': null });
+      await batch.commit();
       return 'Installation removed on GitHub — workspace unlinked';
     }
     if (payload.action === 'suspend' || payload.action === 'unsuspend') {
@@ -41,8 +50,8 @@ async function handleInstallationLifecycle(event, payload, workspaceId, installa
 
 /**
  * POST /api/github/webhook
- * Verifies the HMAC signature against the raw body, maps the installation to its workspace,
- * and queues push / pull_request deliveries for asynchronous AI translation (see pipeline.js).
+ * Verifies the HMAC signature against the raw body, routes repository events via `repoLinks/{repoId}`
+ * (1 repo = 1 business workspace), and queues push / pull_request deliveries for AI translation.
  */
 export const githubWebhook = onRequest(
   { secrets: [GITHUB_WEBHOOK_SECRET, GITHUB_PRIVATE_KEY], maxInstances: 20, timeoutSeconds: 30 },
@@ -62,22 +71,49 @@ export const githubWebhook = onRequest(
     const installationId = payload.installation?.id;
     if (!installationId) return res.status(202).json({ ignored: 'No installation on payload' });
 
-    const link = await db.doc(`installations/${installationId}`).get();
-    if (!link.exists) return res.status(202).json({ ignored: 'Installation is not linked to a workspace' });
-    const { workspaceId } = link.data();
-    const logs = db.collection(`workspaces/${workspaceId}/webhookLogs`);
-    const base = { event, action: payload.action || null, deliveryId, repo: payload.repository?.full_name || null, receivedAt: FieldValue.serverTimestamp() };
-
     try {
       if (event === 'installation' || event === 'installation_repositories') {
-        const message = await handleInstallationLifecycle(event, payload, workspaceId, installationId);
-        await logs.add({ ...base, status: 'processed', message });
+        const wsQuery = await db.collection('workspaces').where('github.installationId', '==', installationId).get();
+        const wsIds = wsQuery.docs.map((d) => d.id);
+        if (!wsIds.length) {
+          const link = await db.doc(`installations/${installationId}`).get();
+          if (link.exists && link.data()?.workspaceId) wsIds.push(link.data().workspaceId);
+        }
+        if (!wsIds.length) return res.status(202).json({ ignored: 'Installation is not linked to any workspace' });
+        for (const wsId of wsIds) {
+          const message = await handleInstallationLifecycle(event, payload, wsId, installationId);
+          await db.collection(`workspaces/${wsId}/webhookLogs`).add({
+            event,
+            action: payload.action || null,
+            deliveryId,
+            repo: null,
+            receivedAt: FieldValue.serverTimestamp(),
+            status: 'processed',
+            message,
+          });
+        }
         return res.status(200).json({ ok: true });
       }
 
+      // Route push / pull_request strictly to the single workspace that locked this repository
+      const repoId = payload.repository?.id;
+      let workspaceId = null;
+      if (repoId) {
+        const repoLink = await db.doc(`repoLinks/${repoId}`).get();
+        if (repoLink.exists) workspaceId = repoLink.data()?.workspaceId || null;
+      }
+      if (!workspaceId) {
+        const link = await db.doc(`installations/${installationId}`).get();
+        if (link.exists) workspaceId = link.data()?.workspaceId || null;
+      }
+      if (!workspaceId) return res.status(202).json({ ignored: 'Repository is not linked to a workspace' });
+
+      const logs = db.collection(`workspaces/${workspaceId}/webhookLogs`);
+      const base = { event, action: payload.action || null, deliveryId, repo: payload.repository?.full_name || null, receivedAt: FieldValue.serverTimestamp() };
+
       const ws = (await db.doc(`workspaces/${workspaceId}`).get()).data();
       const selected = ws?.github?.selectedRepo;
-      if (!selected || payload.repository?.id !== selected.id) {
+      if (!selected || String(repoId) !== String(selected.id)) {
         await logs.add({ ...base, status: 'ignored', message: 'Delivery is for a repository this workspace does not follow' });
         return res.status(202).json({ ignored: 'Repository not selected' });
       }

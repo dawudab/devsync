@@ -15,6 +15,13 @@ const PERMISSIONS = [
 ];
 
 function RepoPicker({ repos, selectedId, onSelect, busyId }) {
+  if (!repos.length) {
+    return (
+      <p className="rounded-2xl bg-ink-50 p-4 text-center text-xs text-ink-500 ring-1 ring-inset ring-ink-200">
+        All repositories in this GitHub installation are already locked to other businesses. Grant access to another repository on GitHub and click Refresh.
+      </p>
+    );
+  }
   return (
     <ul className="space-y-2">
       {repos.map((r) => (
@@ -184,7 +191,7 @@ export function GitHubConnection() {
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate font-mono text-sm font-semibold text-ink-900">{gh.selectedRepo.fullName}</p>
-          <p className="text-xs text-emerald-700">Connected {gh.connectedAt ? `· ${formatDateTime(gh.connectedAt)}` : ''}</p>
+          <p className="text-xs text-emerald-700">Locked to this business {gh.connectedAt ? `· ${formatDateTime(gh.connectedAt)}` : ''}</p>
         </div>
         <Badge tone={gh.status === 'suspended' ? 'amber' : 'emerald'} dot>
           {gh.status === 'suspended' ? 'Suspended' : 'Live'}

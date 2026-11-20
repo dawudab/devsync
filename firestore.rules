@@ -47,6 +47,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // repoId -> workspaceId lock (1 repo = 1 business). Server only.
+    match /repoLinks/{repoId} {
+      allow read, write: if false;
+    }
+
     // 6-character role-locked invite tokens. Joining goes through joinWorkspace Cloud Function.
     match /invites/{code} {
       allow read: if isMember(resource.data.workspaceId);

@@ -398,16 +398,24 @@ export function createLocalBackend() {
     },
 
     async startGithubInstall(wsId) {
-      const { ws } = assertMember(wsId, ['developer']);
+      const { ws } = assertMember(wsId, ['developer', 'owner']);
       await delay(1200);
       const login = ws.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'my-company';
-      const repos = ['web-app', 'mobile-app', 'marketing-site'].map((name, i) => ({
-        id: 1000 + i + Math.floor(Math.random() * 1000),
-        fullName: `${login}/${name}`,
-        private: i < 2,
-        defaultBranch: 'main',
-        htmlUrl: `https://github.com/${login}/${name}`,
-      }));
+      const lockedIds = new Set(
+        store
+          .list('workspaces')
+          .filter((w) => w.id !== wsId && w.github?.selectedRepo?.id)
+          .map((w) => String(w.github.selectedRepo.id)),
+      );
+      const repos = ['web-app', 'mobile-app', 'marketing-site']
+        .map((name, i) => ({
+          id: 1000 + i + Math.floor(Math.random() * 1000),
+          fullName: `${login}/${name}`,
+          private: i < 2,
+          defaultBranch: 'main',
+          htmlUrl: `https://github.com/${login}/${name}`,
+        }))
+        .filter((r) => !lockedIds.has(String(r.id)));
       store.update(wsPath(wsId), {
         github: { installationId: `demo-${Math.floor(Math.random() * 1e6)}`, account: { login, type: 'Organization' }, repos, selectedRepo: null, status: 'pending_selection', connectedAt: Date.now() },
       });
@@ -419,7 +427,11 @@ export function createLocalBackend() {
       const { ws } = assertMember(wsId, ['developer', 'owner']);
       const repo = ws.github?.repos?.find((r) => String(r.id) === String(repoId));
       if (!repo) throw new Error('Repository not found in this installation');
-      store.update(wsPath(wsId), { github: { ...ws.github, selectedRepo: repo, status: 'connected', connectedAt: Date.now() } });
+      const takenByOther = store
+        .list('workspaces')
+        .some((w) => w.id !== wsId && String(w.github?.selectedRepo?.id) === String(repo.id));
+      if (takenByOther) throw new Error('This repository is already locked to another business workspace');
+      store.update(wsPath(wsId), { github: { ...ws.github, repos: [repo], selectedRepo: repo, status: 'connected', connectedAt: Date.now() } });
       // Backfill initial activity if feed is empty
       const existingUpdates = store.list(`${wsPath(wsId)}/updates`);
       if (existingUpdates.length === 0) {
